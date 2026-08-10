@@ -17,7 +17,12 @@ class ChatRequest(BaseModel):
     message: str = Field(
         ...,
         description="Message prompt sent to the AI service",
-        json_schema_extra={"example": "Apa tujuan pembelajaran ini?"}
+        json_schema_extra={"example": "Apa APD yang wajib digunakan?"}
+    )
+    document_id: Optional[Union[int, str]] = Field(
+        None,
+        description="Optional document ID to scope search exclusively to a specific document",
+        json_schema_extra={"example": 1001}
     )
 
 
@@ -28,5 +33,5 @@ class ChatResponse(BaseModel):
     model: Optional[str] = None
     sources: List[Dict[str, Any]] = Field(
         default_factory=list,
-        description="Retrieved source document chunk citations"
+        description="Retrieved source PDF chunk citations with page numbers"
     )

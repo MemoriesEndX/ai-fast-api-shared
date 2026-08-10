@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 3
     RAG_SCORE_THRESHOLD: float = 0.4
 
+    # PDF Processing Limits
+    MAX_PDF_SIZE_MB: int = 25
+
     # Security Keys
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"

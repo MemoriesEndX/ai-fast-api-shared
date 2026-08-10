@@ -30,7 +30,6 @@ class QdrantService:
         if self.client is None:
             try:
                 from qdrant_client import QdrantClient
-                # Quick 1.0s timeout and check_compatibility=False for fast fallback when server is offline
                 temp_client = QdrantClient(url=self.url, timeout=1.0, check_compatibility=False)
                 temp_client.get_collections()
                 self.client = temp_client
@@ -56,7 +55,7 @@ class QdrantService:
                     )
                     logger.info(f"Created Qdrant collection: {self.collection_name}")
 
-                    # Create payload indexes for fast filtering by application & document_id
+                    # Create payload indexes for fast filtering by application, document_id, and document_hash
                     self.client.create_payload_index(
                         collection_name=self.collection_name,
                         field_name="application",
@@ -67,8 +66,44 @@ class QdrantService:
                         field_name="document_id",
                         field_schema=models.PayloadSchemaType.KEYWORD,
                     )
+                    self.client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name="document_hash",
+                        field_schema=models.PayloadSchemaType.KEYWORD,
+                    )
             except Exception as e:
                 logger.error(f"Error ensuring Qdrant collection: {e}")
+
+    async def get_document_by_hash(self, application: str, document_hash: str) -> Optional[Dict[str, Any]]:
+        """Check if document vector with document_hash already exists."""
+        self._get_client()
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                query_filter = models.Filter(
+                    must=[
+                        models.FieldCondition(key="application", match=models.MatchValue(value=application)),
+                        models.FieldCondition(key="document_hash", match=models.MatchValue(value=document_hash)),
+                    ]
+                )
+                res = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=query_filter,
+                    limit=1,
+                )
+                if res and res[0]:
+                    hit = res[0][0]
+                    return hit.payload
+            except Exception as e:
+                logger.error(f"Error checking document hash: {e}")
+
+        # In-memory check
+        store = self._memory_store.get(self.collection_name, [])
+        for item in store:
+            p = item["payload"]
+            if p.get("application") == application and p.get("document_hash") == document_hash:
+                return p
+        return None
 
     async def upsert_chunks(self, chunks_data: List[Dict[str, Any]]) -> bool:
         """Upsert document chunks into vector database."""
@@ -86,11 +121,16 @@ class QdrantService:
                     vector = item["vector"]
                     payload = {
                         "application": item["application"],
-                        "source_type": item.get("source_type", "document"),
+                        "source_type": item.get("source_type", "pdf"),
                         "document_id": str(item["document_id"]),
                         "content_id": item.get("content_id"),
                         "title": item.get("title", ""),
+                        "filename": item.get("filename", ""),
+                        "document_hash": item.get("document_hash", ""),
+                        "version": item.get("version", "1.0"),
                         "chunk_index": item["chunk_index"],
+                        "page_start": item.get("page_start", 1),
+                        "page_end": item.get("page_end", 1),
                         "text": item["text"],
                     }
                     points.append(
@@ -119,11 +159,16 @@ class QdrantService:
                 "vector": item["vector"],
                 "payload": {
                     "application": item["application"],
-                    "source_type": item.get("source_type", "document"),
+                    "source_type": item.get("source_type", "pdf"),
                     "document_id": str(item["document_id"]),
                     "content_id": item.get("content_id"),
                     "title": item.get("title", ""),
+                    "filename": item.get("filename", ""),
+                    "document_hash": item.get("document_hash", ""),
+                    "version": item.get("version", "1.0"),
                     "chunk_index": item["chunk_index"],
+                    "page_start": item.get("page_start", 1),
+                    "page_end": item.get("page_end", 1),
                     "text": item["text"],
                 }
             })
@@ -133,25 +178,32 @@ class QdrantService:
         self,
         query_vector: List[float],
         application: str,
+        document_id: Optional[str] = None,
         top_k: int = settings.RAG_TOP_K,
         score_threshold: float = settings.RAG_SCORE_THRESHOLD,
     ) -> List[Dict[str, Any]]:
-        """Search similar document chunks strictly filtered by application tenant."""
+        """Search similar document chunks strictly filtered by application tenant and optional document_id."""
         self._get_client()
 
         if self.client and self.client != "in_memory":
             try:
                 from qdrant_client.http import models
                 
-                # Strict multi-tenant payload filter
-                query_filter = models.Filter(
-                    must=[
+                must_filters = [
+                    models.FieldCondition(
+                        key="application",
+                        match=models.MatchValue(value=application),
+                    )
+                ]
+                if document_id:
+                    must_filters.append(
                         models.FieldCondition(
-                            key="application",
-                            match=models.MatchValue(value=application),
+                            key="document_id",
+                            match=models.MatchValue(value=str(document_id)),
                         )
-                    ]
-                )
+                    )
+
+                query_filter = models.Filter(must=must_filters)
 
                 if hasattr(self.client, "search"):
                     hits = self.client.search(
@@ -177,7 +229,10 @@ class QdrantService:
                         "document_id": hit.payload.get("document_id"),
                         "content_id": hit.payload.get("content_id"),
                         "title": hit.payload.get("title", ""),
+                        "filename": hit.payload.get("filename", ""),
                         "chunk_index": hit.payload.get("chunk_index"),
+                        "page_start": hit.payload.get("page_start", 1),
+                        "page_end": hit.payload.get("page_end", 1),
                         "text": hit.payload.get("text", ""),
                         "score": round(float(hit.score), 4),
                         "application": hit.payload.get("application"),
@@ -191,8 +246,10 @@ class QdrantService:
         results = []
         for item in store:
             payload = item["payload"]
-            if payload.get("application") == application:
-                # Cosine similarity calculation
+            app_match = payload.get("application") == application
+            doc_match = True if not document_id else str(payload.get("document_id")) == str(document_id)
+
+            if app_match and doc_match:
                 v1 = query_vector
                 v2 = item["vector"]
                 dot = sum(a * b for a, b in zip(v1, v2))
@@ -200,12 +257,14 @@ class QdrantService:
                 norm2 = math.sqrt(sum(b * b for b in v2)) or 1.0
                 sim = dot / (norm1 * norm2)
 
-                # In fallback test mode, return all matched tenant documents sorted by cosine similarity
                 results.append({
                     "document_id": payload.get("document_id"),
                     "content_id": payload.get("content_id"),
                     "title": payload.get("title", ""),
+                    "filename": payload.get("filename", ""),
                     "chunk_index": payload.get("chunk_index"),
+                    "page_start": payload.get("page_start", 1),
+                    "page_end": payload.get("page_end", 1),
                     "text": payload.get("text", ""),
                     "score": round(float(sim), 4),
                     "application": payload.get("application"),

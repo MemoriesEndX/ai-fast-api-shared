@@ -12,6 +12,16 @@ class DocumentIndexRequest(BaseModel):
     source_type: Optional[str] = Field("document", description="Document type (pdf, article, document)")
 
 
+class PDFUploadResponse(BaseModel):
+    status: str
+    application: str
+    document_id: str
+    filename: str
+    document_hash: str
+    pages: int
+    chunks: int
+
+
 class DocumentIndexResponse(BaseModel):
     status: str
     application: str
@@ -28,6 +38,7 @@ class DocumentDeleteResponse(BaseModel):
 class RAGSearchRequest(BaseModel):
     application: Union[ApplicationEnum, str] = Field(..., description="Application tenant filter")
     query: str = Field(..., description="Search query string")
+    document_id: Optional[Union[int, str]] = Field(None, description="Optional document ID filter")
     top_k: Optional[int] = Field(3, description="Number of top chunks to return")
 
 
@@ -35,7 +46,10 @@ class ChunkSearchResult(BaseModel):
     document_id: str
     content_id: Optional[str] = None
     title: str
+    filename: Optional[str] = None
     chunk_index: int
+    page_start: Optional[int] = 1
+    page_end: Optional[int] = 1
     score: float
     text: str
     application: str
