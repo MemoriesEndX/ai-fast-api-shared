@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
 from pydantic import BaseModel, Field
 from app.schemas.application import ApplicationEnum
 
@@ -26,3 +26,7 @@ class ChatResponse(BaseModel):
     message: str
     provider: str
     model: Optional[str] = None
+    sources: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Retrieved source document chunk citations"
+    )

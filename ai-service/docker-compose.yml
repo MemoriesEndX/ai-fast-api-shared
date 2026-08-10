@@ -4,6 +4,10 @@ networks:
   ai-network:
     driver: bridge
 
+volumes:
+  qdrant_data:
+    driver: local
+
 services:
   ai-service:
     build:
@@ -19,6 +23,7 @@ services:
       - ai-network
     depends_on:
       - llama-server
+      - qdrant
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -47,3 +52,18 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

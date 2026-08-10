@@ -1,0 +1,262 @@
+import logging
+import math
+import uuid
+from typing import List, Dict, Any, Optional
+from app.core.config import settings
+
+logger = logging.getLogger("ai_service.qdrant")
+
+COLLECTION_NAME = f"{settings.QDRANT_COLLECTION_PREFIX}_documents"
+
+
+class QdrantService:
+    """Service abstraction for Qdrant Vector Database operations."""
+
+    _memory_store: Dict[str, List[Dict[str, Any]]] = {}  # Shared class-level memory store fallback
+
+    def __init__(
+        self,
+        url: str = settings.QDRANT_URL,
+        collection_name: str = COLLECTION_NAME,
+        dimension: int = settings.EMBEDDING_DIMENSION,
+    ):
+        self.url = url
+        self.collection_name = collection_name
+        self.dimension = dimension
+        self.client = None
+
+    def _get_client(self):
+        """Lazy load QdrantClient with fast connection verification."""
+        if self.client is None:
+            try:
+                from qdrant_client import QdrantClient
+                # Quick 1.0s timeout and check_compatibility=False for fast fallback when server is offline
+                temp_client = QdrantClient(url=self.url, timeout=1.0, check_compatibility=False)
+                temp_client.get_collections()
+                self.client = temp_client
+                self._ensure_collection()
+            except Exception as e:
+                logger.warning(f"Could not connect to Qdrant server at {self.url} ({e}). Operating in memory mode.")
+                self.client = "in_memory"
+
+    def _ensure_collection(self):
+        """Ensure collection and payload field indexes exist."""
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                collections = self.client.get_collections().collections
+                exists = any(c.name == self.collection_name for c in collections)
+                if not exists:
+                    self.client.create_collection(
+                        collection_name=self.collection_name,
+                        vectors_config=models.VectorParams(
+                            size=self.dimension,
+                            distance=models.Distance.COSINE,
+                        ),
+                    )
+                    logger.info(f"Created Qdrant collection: {self.collection_name}")
+
+                    # Create payload indexes for fast filtering by application & document_id
+                    self.client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name="application",
+                        field_schema=models.PayloadSchemaType.KEYWORD,
+                    )
+                    self.client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name="document_id",
+                        field_schema=models.PayloadSchemaType.KEYWORD,
+                    )
+            except Exception as e:
+                logger.error(f"Error ensuring Qdrant collection: {e}")
+
+    async def upsert_chunks(self, chunks_data: List[Dict[str, Any]]) -> bool:
+        """Upsert document chunks into vector database."""
+        self._get_client()
+
+        if not chunks_data:
+            return True
+
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                points = []
+                for item in chunks_data:
+                    point_id = str(uuid.uuid4())
+                    vector = item["vector"]
+                    payload = {
+                        "application": item["application"],
+                        "source_type": item.get("source_type", "document"),
+                        "document_id": str(item["document_id"]),
+                        "content_id": item.get("content_id"),
+                        "title": item.get("title", ""),
+                        "chunk_index": item["chunk_index"],
+                        "text": item["text"],
+                    }
+                    points.append(
+                        models.PointStruct(
+                            id=point_id,
+                            vector=vector,
+                            payload=payload,
+                        )
+                    )
+
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=points,
+                )
+                logger.info(f"Successfully upserted {len(points)} chunks into Qdrant.")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to upsert to Qdrant: {e}")
+
+        # Fallback in-memory storage for development / testing
+        if self.collection_name not in self._memory_store:
+            self._memory_store[self.collection_name] = []
+        for item in chunks_data:
+            self._memory_store[self.collection_name].append({
+                "id": str(uuid.uuid4()),
+                "vector": item["vector"],
+                "payload": {
+                    "application": item["application"],
+                    "source_type": item.get("source_type", "document"),
+                    "document_id": str(item["document_id"]),
+                    "content_id": item.get("content_id"),
+                    "title": item.get("title", ""),
+                    "chunk_index": item["chunk_index"],
+                    "text": item["text"],
+                }
+            })
+        return True
+
+    async def search_similar(
+        self,
+        query_vector: List[float],
+        application: str,
+        top_k: int = settings.RAG_TOP_K,
+        score_threshold: float = settings.RAG_SCORE_THRESHOLD,
+    ) -> List[Dict[str, Any]]:
+        """Search similar document chunks strictly filtered by application tenant."""
+        self._get_client()
+
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                
+                # Strict multi-tenant payload filter
+                query_filter = models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="application",
+                            match=models.MatchValue(value=application),
+                        )
+                    ]
+                )
+
+                if hasattr(self.client, "search"):
+                    hits = self.client.search(
+                        collection_name=self.collection_name,
+                        query_vector=query_vector,
+                        query_filter=query_filter,
+                        limit=top_k,
+                        score_threshold=score_threshold,
+                    )
+                else:
+                    response = self.client.query_points(
+                        collection_name=self.collection_name,
+                        query=query_vector,
+                        query_filter=query_filter,
+                        limit=top_k,
+                        score_threshold=score_threshold,
+                    )
+                    hits = response.points
+
+                results = []
+                for hit in hits:
+                    results.append({
+                        "document_id": hit.payload.get("document_id"),
+                        "content_id": hit.payload.get("content_id"),
+                        "title": hit.payload.get("title", ""),
+                        "chunk_index": hit.payload.get("chunk_index"),
+                        "text": hit.payload.get("text", ""),
+                        "score": round(float(hit.score), 4),
+                        "application": hit.payload.get("application"),
+                    })
+                return results
+            except Exception as e:
+                logger.error(f"Qdrant search error: {e}")
+
+        # In-memory fallback similarity search
+        store = self._memory_store.get(self.collection_name, [])
+        results = []
+        for item in store:
+            payload = item["payload"]
+            if payload.get("application") == application:
+                # Cosine similarity calculation
+                v1 = query_vector
+                v2 = item["vector"]
+                dot = sum(a * b for a, b in zip(v1, v2))
+                norm1 = math.sqrt(sum(a * a for a in v1)) or 1.0
+                norm2 = math.sqrt(sum(b * b for b in v2)) or 1.0
+                sim = dot / (norm1 * norm2)
+
+                # In fallback test mode, return all matched tenant documents sorted by cosine similarity
+                results.append({
+                    "document_id": payload.get("document_id"),
+                    "content_id": payload.get("content_id"),
+                    "title": payload.get("title", ""),
+                    "chunk_index": payload.get("chunk_index"),
+                    "text": payload.get("text", ""),
+                    "score": round(float(sim), 4),
+                    "application": payload.get("application"),
+                })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
+
+    async def delete_document(self, application: str, document_id: str) -> bool:
+        """Delete all vector points belonging to a specific document_id under a given application."""
+        self._get_client()
+
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                delete_filter = models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="application",
+                            match=models.MatchValue(value=application),
+                        ),
+                        models.FieldCondition(
+                            key="document_id",
+                            match=models.MatchValue(value=str(document_id)),
+                        ),
+                    ]
+                )
+                self.client.delete(
+                    collection_name=self.collection_name,
+                    points_selector=models.FilterSelector(filter=delete_filter),
+                )
+                logger.info(f"Deleted document {document_id} under app {application} from Qdrant.")
+                return True
+            except Exception as e:
+                logger.error(f"Error deleting document from Qdrant: {e}")
+
+        # In-memory deletion fallback
+        if self.collection_name in self._memory_store:
+            self._memory_store[self.collection_name] = [
+                item for item in self._memory_store[self.collection_name]
+                if not (item["payload"].get("application") == application and str(item["payload"].get("document_id")) == str(document_id))
+            ]
+        return True
+
+    async def check_health(self) -> Dict[str, Any]:
+        """Check Qdrant server connection health status."""
+        self._get_client()
+        if self.client and self.client != "in_memory":
+            try:
+                self.client.get_collections()
+                return {"status": "ok", "service": "qdrant", "url": self.url}
+            except Exception:
+                pass
+        return {"status": "degraded", "service": "qdrant", "url": self.url}

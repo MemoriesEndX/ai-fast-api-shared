@@ -1,0 +1,46 @@
+from typing import Optional, List, Dict, Any, Union
+from pydantic import BaseModel, Field
+from app.schemas.application import ApplicationEnum
+
+
+class DocumentIndexRequest(BaseModel):
+    application: Union[ApplicationEnum, str] = Field(..., description="Application tenant (owl, hr-corner)")
+    document_id: Union[int, str] = Field(..., description="Unique document ID")
+    content_id: Optional[Union[int, str]] = Field(None, description="Optional content/module ID")
+    title: str = Field(..., description="Document title")
+    text: str = Field(..., description="Full text content of document")
+    source_type: Optional[str] = Field("document", description="Document type (pdf, article, document)")
+
+
+class DocumentIndexResponse(BaseModel):
+    status: str
+    application: str
+    document_id: str
+    chunks: int
+
+
+class DocumentDeleteResponse(BaseModel):
+    status: str
+    application: str
+    document_id: str
+
+
+class RAGSearchRequest(BaseModel):
+    application: Union[ApplicationEnum, str] = Field(..., description="Application tenant filter")
+    query: str = Field(..., description="Search query string")
+    top_k: Optional[int] = Field(3, description="Number of top chunks to return")
+
+
+class ChunkSearchResult(BaseModel):
+    document_id: str
+    content_id: Optional[str] = None
+    title: str
+    chunk_index: int
+    score: float
+    text: str
+    application: str
+
+
+class RAGSearchResponse(BaseModel):
+    application: str
+    results: List[ChunkSearchResult]

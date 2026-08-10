@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     OWL_BASE_URL: str = "http://owl-app.local"
     HR_CORNER_BASE_URL: str = "http://hr-corner-app.local"
 
+    # LLM Settings
     LLM_PROVIDER: str = "llama_cpp"
     LLM_BASE_URL: str = "http://llama-server:8080"
     LLM_MODEL: str = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
@@ -22,6 +23,19 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 512
     LLM_TEMPERATURE: float = 0.2
 
+    # Qdrant Vector DB Settings
+    QDRANT_URL: str = "http://qdrant:6333"
+    QDRANT_COLLECTION_PREFIX: str = "shared_ai"
+
+    # Embedding & RAG Settings
+    EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    EMBEDDING_DIMENSION: int = 384
+    CHUNK_SIZE: int = 500
+    CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 3
+    RAG_SCORE_THRESHOLD: float = 0.4
+
+    # Security Keys
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"
     HR_AI_API_KEY: str = "hr-corner-secret-api-key"
