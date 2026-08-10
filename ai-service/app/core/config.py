@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # PDF Processing Limits
     MAX_PDF_SIZE_MB: int = 25
 
+    # Video & Audio Processing Limits
+    MAX_VIDEO_SIZE_MB: int = 250
+    MAX_VIDEO_DURATION_SECONDS: int = 3600
+    WHISPER_MODEL: str = "tiny"
+
     # Security Keys
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"

@@ -9,7 +9,7 @@ class DocumentIndexRequest(BaseModel):
     content_id: Optional[Union[int, str]] = Field(None, description="Optional content/module ID")
     title: str = Field(..., description="Document title")
     text: str = Field(..., description="Full text content of document")
-    source_type: Optional[str] = Field("document", description="Document type (pdf, article, document)")
+    source_type: Optional[str] = Field("document", description="Document type (pdf, article, video)")
 
 
 class PDFUploadResponse(BaseModel):
@@ -20,6 +20,24 @@ class PDFUploadResponse(BaseModel):
     document_hash: str
     pages: int
     chunks: int
+
+
+class VideoUploadResponse(BaseModel):
+    status: str
+    application: str
+    document_id: str
+    filename: str
+    document_hash: str
+    duration_seconds: float
+    segments: int
+    chunks: int
+
+
+class VideoStatusResponse(BaseModel):
+    document_id: str
+    application: str
+    status: str
+    progress: int
 
 
 class DocumentIndexResponse(BaseModel):
@@ -45,11 +63,16 @@ class RAGSearchRequest(BaseModel):
 class ChunkSearchResult(BaseModel):
     document_id: str
     content_id: Optional[str] = None
+    source_type: Optional[str] = "pdf"
     title: str
     filename: Optional[str] = None
     chunk_index: int
     page_start: Optional[int] = 1
     page_end: Optional[int] = 1
+    start_seconds: Optional[float] = None
+    end_seconds: Optional[float] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     score: float
     text: str
     application: str

@@ -6,6 +6,8 @@ from app.schemas.rag import (
     DocumentIndexResponse,
     DocumentDeleteResponse,
     PDFUploadResponse,
+    VideoUploadResponse,
+    VideoStatusResponse,
     RAGSearchRequest,
     RAGSearchResponse,
 )
@@ -21,6 +23,73 @@ def get_rag_service() -> RAGService:
 
 def get_auth_service() -> AuthorizationService:
     return AuthorizationService()
+
+
+@router.post("/videos/upload", response_model=VideoUploadResponse)
+async def upload_video_document(
+    file: UploadFile = File(..., description="Video file to extract audio and ingest transcript"),
+    application: str = Form(..., description="Application tenant (owl, hr-corner)"),
+    document_id: str = Form(..., description="Unique document ID"),
+    title: str = Form(..., description="Video title"),
+    content_id: Optional[str] = Form(None, description="Optional content/module ID"),
+    version: str = Form("1.0", description="Video version"),
+    language: str = Form("id", description="Audio language code (id, en)"),
+    rag_service: RAGService = Depends(get_rag_service),
+    auth_service: AuthorizationService = Depends(get_auth_service),
+    client_app: str = Depends(verify_api_key),
+):
+    """Upload video file, extract audio using FFmpeg, transcribe using Whisper, and index into Vector DB."""
+    file_bytes = await file.read()
+    res = await rag_service.ingest_video_bytes(
+        application=application,
+        document_id=document_id,
+        title=title,
+        filename=file.filename or "uploaded_video.mp4",
+        file_bytes=file_bytes,
+        content_id=content_id,
+        version=version,
+        language=language,
+    )
+    return VideoUploadResponse(**res)
+
+
+@router.get("/videos/{document_id}/status", response_model=VideoStatusResponse)
+async def get_video_status(
+    document_id: str,
+    application: str = Query(..., description="Application tenant (owl, hr-corner)"),
+    rag_service: RAGService = Depends(get_rag_service),
+    client_app: str = Depends(verify_api_key),
+):
+    """Check processing status of video transcription job."""
+    res = await rag_service.get_video_processing_status(application=application, document_id=document_id)
+    return VideoStatusResponse(**res)
+
+
+@router.post("/videos/{document_id}/reindex", response_model=VideoUploadResponse)
+async def reindex_video_document(
+    document_id: str,
+    file: UploadFile = File(..., description="Updated video file"),
+    application: str = Form(..., description="Application tenant (owl, hr-corner)"),
+    title: str = Form(..., description="Video title"),
+    content_id: Optional[str] = Form(None, description="Optional content ID"),
+    version: str = Form("1.1", description="Updated video version"),
+    language: str = Form("id", description="Audio language code"),
+    rag_service: RAGService = Depends(get_rag_service),
+    client_app: str = Depends(verify_api_key),
+):
+    """Reindex video by clearing old vector points and re-processing video audio transcript."""
+    file_bytes = await file.read()
+    res = await rag_service.reindex_video_bytes(
+        application=application,
+        document_id=document_id,
+        title=title,
+        filename=file.filename or "uploaded_video.mp4",
+        file_bytes=file_bytes,
+        content_id=content_id,
+        version=version,
+        language=language,
+    )
+    return VideoUploadResponse(**res)
 
 
 @router.post("/documents/upload", response_model=PDFUploadResponse)
@@ -100,7 +169,7 @@ async def delete_document(
     rag_service: RAGService = Depends(get_rag_service),
     client_app: str = Depends(verify_api_key),
 ):
-    """Delete document chunks from Vector DB by document_id and application tenant."""
+    """Delete document or video chunks from Vector DB by document_id and application tenant."""
     res = await rag_service.delete_document(application=application, document_id=document_id)
     return DocumentDeleteResponse(**res)
 

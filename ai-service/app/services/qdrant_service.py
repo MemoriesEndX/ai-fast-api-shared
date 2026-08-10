@@ -106,7 +106,7 @@ class QdrantService:
         return None
 
     async def upsert_chunks(self, chunks_data: List[Dict[str, Any]]) -> bool:
-        """Upsert document chunks into vector database."""
+        """Upsert document or video chunks into vector database."""
         self._get_client()
 
         if not chunks_data:
@@ -131,6 +131,10 @@ class QdrantService:
                         "chunk_index": item["chunk_index"],
                         "page_start": item.get("page_start", 1),
                         "page_end": item.get("page_end", 1),
+                        "start_seconds": item.get("start_seconds"),
+                        "end_seconds": item.get("end_seconds"),
+                        "start_time": item.get("start_time"),
+                        "end_time": item.get("end_time"),
                         "text": item["text"],
                     }
                     points.append(
@@ -169,6 +173,10 @@ class QdrantService:
                     "chunk_index": item["chunk_index"],
                     "page_start": item.get("page_start", 1),
                     "page_end": item.get("page_end", 1),
+                    "start_seconds": item.get("start_seconds"),
+                    "end_seconds": item.get("end_seconds"),
+                    "start_time": item.get("start_time"),
+                    "end_time": item.get("end_time"),
                     "text": item["text"],
                 }
             })
@@ -182,7 +190,7 @@ class QdrantService:
         top_k: int = settings.RAG_TOP_K,
         score_threshold: float = settings.RAG_SCORE_THRESHOLD,
     ) -> List[Dict[str, Any]]:
-        """Search similar document chunks strictly filtered by application tenant and optional document_id."""
+        """Search similar document or video chunks strictly filtered by application tenant and optional document_id."""
         self._get_client()
 
         if self.client and self.client != "in_memory":
@@ -228,11 +236,16 @@ class QdrantService:
                     results.append({
                         "document_id": hit.payload.get("document_id"),
                         "content_id": hit.payload.get("content_id"),
+                        "source_type": hit.payload.get("source_type", "pdf"),
                         "title": hit.payload.get("title", ""),
                         "filename": hit.payload.get("filename", ""),
                         "chunk_index": hit.payload.get("chunk_index"),
                         "page_start": hit.payload.get("page_start", 1),
                         "page_end": hit.payload.get("page_end", 1),
+                        "start_seconds": hit.payload.get("start_seconds"),
+                        "end_seconds": hit.payload.get("end_seconds"),
+                        "start_time": hit.payload.get("start_time"),
+                        "end_time": hit.payload.get("end_time"),
                         "text": hit.payload.get("text", ""),
                         "score": round(float(hit.score), 4),
                         "application": hit.payload.get("application"),
@@ -260,11 +273,16 @@ class QdrantService:
                 results.append({
                     "document_id": payload.get("document_id"),
                     "content_id": payload.get("content_id"),
+                    "source_type": payload.get("source_type", "pdf"),
                     "title": payload.get("title", ""),
                     "filename": payload.get("filename", ""),
                     "chunk_index": payload.get("chunk_index"),
                     "page_start": payload.get("page_start", 1),
                     "page_end": payload.get("page_end", 1),
+                    "start_seconds": payload.get("start_seconds"),
+                    "end_seconds": payload.get("end_seconds"),
+                    "start_time": payload.get("start_time"),
+                    "end_time": payload.get("end_time"),
                     "text": payload.get("text", ""),
                     "score": round(float(sim), 4),
                     "application": payload.get("application"),
