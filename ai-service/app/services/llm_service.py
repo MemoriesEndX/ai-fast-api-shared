@@ -1,7 +1,13 @@
+import logging
+import httpx
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+from fastapi import HTTPException, status
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse
+from app.services.prompt_service import PromptService
+
+logger = logging.getLogger("ai_service.llm")
 
 
 class BaseLLMService(ABC):
@@ -12,32 +18,119 @@ class BaseLLMService(ABC):
         """Generate response from the LLM model."""
         pass
 
+    @abstractmethod
+    async def check_health(self) -> Dict[str, Any]:
+        """Check LLM backend health status."""
+        pass
+
 
 class LlamaCppLLMService(BaseLLMService):
-    """LLM Service implementation targeting llama.cpp / OpenAI-compatible endpoint."""
+    """LLM Service implementation communicating with llama-server via OpenAI-compatible REST API."""
 
-    def __init__(self, base_url: str = settings.LLM_BASE_URL, provider_name: str = settings.LLM_PROVIDER):
-        self.base_url = base_url
+    def __init__(
+        self,
+        base_url: str = settings.LLM_BASE_URL,
+        model_name: str = settings.LLM_MODEL,
+        provider_name: str = settings.LLM_PROVIDER,
+        timeout: float = settings.LLM_TIMEOUT,
+        prompt_service: Optional[PromptService] = None,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.model_name = model_name
         self.provider_name = provider_name
-        self.model_name: Optional[str] = None
+        self.timeout = timeout
+        self.prompt_service = prompt_service or PromptService()
 
     async def generate_response(self, request: ChatRequest) -> ChatResponse:
-        # Phase 1 Placeholder implementation:
-        # Returns ready status without connecting to Qwen / llama-server yet.
-        # Phase 2 will plug in HTTP calls to llama-server via self.base_url seamlessly.
         app_name = str(request.application.value if hasattr(request.application, 'value') else request.application)
-        
-        return ChatResponse(
-            application=app_name,
-            message="AI service is ready.",
-            provider=self.provider_name,
-            model=self.model_name,
-        )
+        system_prompt = self.prompt_service.get_system_prompt(request.application)
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.message},
+            ],
+            "temperature": settings.LLM_TEMPERATURE,
+            "max_tokens": settings.LLM_MAX_TOKENS,
+        }
+
+        endpoint = f"{self.base_url}/v1/chat/completions"
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(endpoint, json=payload)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    choices = data.get("choices", [])
+                    if choices and len(choices) > 0:
+                        content = choices[0].get("message", {}).get("content", "")
+                        return ChatResponse(
+                            application=app_name,
+                            model=self.model_name,
+                            message=content.strip(),
+                            provider=self.provider_name,
+                        )
+                
+                logger.error(f"llama-server error: HTTP {response.status_code} - {response.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail={
+                        "code": "LLM_ERROR",
+                        "message": "LLM inference server returned an error response."
+                    }
+                )
+
+        except httpx.TimeoutException:
+            logger.error(f"llama-server timeout after {self.timeout}s")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail={
+                    "code": "LLM_TIMEOUT",
+                    "message": f"LLM generation timed out after {self.timeout} seconds."
+                }
+            )
+        except (httpx.ConnectError, httpx.RequestError) as exc:
+            logger.warning(f"llama-server connection failed: {exc}")
+            # Fallback for development / mock mode if llama-server container is offline
+            if settings.APP_ENV == "development":
+                return ChatResponse(
+                    application=app_name,
+                    model=self.model_name,
+                    message="[Mock Response] AI model service is currently starting up or offline.",
+                    provider=self.provider_name,
+                )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "LLM_UNAVAILABLE",
+                    "message": "AI model backend is temporarily unavailable."
+                }
+            )
+
+    async def check_health(self) -> Dict[str, Any]:
+        """Ping llama-server health endpoint to verify model readiness."""
+        health_endpoint = f"{self.base_url}/health"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(health_endpoint)
+                if res.status_code == 200:
+                    return {
+                        "status": "ok",
+                        "provider": self.provider_name,
+                        "model": self.model_name,
+                    }
+        except Exception as e:
+            logger.debug(f"llama-server health check failed: {e}")
+
+        return {
+            "status": "degraded",
+            "provider": self.provider_name,
+            "model": self.model_name,
+        }
 
 
 def get_llm_service() -> BaseLLMService:
-    """Factory function to get configured LLM service provider."""
-    if settings.LLM_PROVIDER == "llama_cpp":
-        return LlamaCppLLMService(base_url=settings.LLM_BASE_URL)
-    # Default fallback
-    return LlamaCppLLMService(base_url=settings.LLM_BASE_URL)
+    """Factory function to retrieve LLM Service."""
+    return LlamaCppLLMService()

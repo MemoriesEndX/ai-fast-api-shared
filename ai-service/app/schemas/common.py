@@ -11,3 +11,9 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+
+
+class LLMHealthResponse(BaseModel):
+    status: str
+    provider: str
+    model: str

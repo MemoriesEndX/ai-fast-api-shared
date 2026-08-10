@@ -17,6 +17,10 @@ class Settings(BaseSettings):
 
     LLM_PROVIDER: str = "llama_cpp"
     LLM_BASE_URL: str = "http://llama-server:8080"
+    LLM_MODEL: str = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    LLM_TIMEOUT: float = 120.0
+    LLM_MAX_TOKENS: int = 512
+    LLM_TEMPERATURE: float = 0.2
 
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"

@@ -19,3 +19,8 @@ htmlcov/
 .idea/
 .vscode/
 .DS_Store
+
+# Models & Binary Artifacts
+models/
+*.gguf
+

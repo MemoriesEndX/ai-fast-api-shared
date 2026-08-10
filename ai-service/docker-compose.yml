@@ -1,5 +1,9 @@
 version: '3.8'
 
+networks:
+  ai-network:
+    driver: bridge
+
 services:
   ai-service:
     build:
@@ -11,9 +15,35 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    networks:
+      - ai-network
+    depends_on:
+      - llama-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 5s
+
+  llama-server:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    container_name: llama-server
+    restart: unless-stopped
+    command: >
+      /llama-server
+      -m /models/qwen2.5-0.5b/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      -c 2048
+      -n 512
+      --host 0.0.0.0
+      --port 8080
+    volumes:
+      - ./models:/models:ro
+    networks:
+      - ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

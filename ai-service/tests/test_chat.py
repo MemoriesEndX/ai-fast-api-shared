@@ -1,4 +1,4 @@
-def test_chat_placeholder_endpoint(client):
+def test_chat_owl_endpoint(client):
     payload = {
         "application": "owl",
         "user_id": 123,
@@ -8,19 +8,21 @@ def test_chat_placeholder_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert data["application"] == "owl"
-    assert data["message"] == "AI service is ready."
     assert data["provider"] == "llama_cpp"
-    assert data["model"] is None
+    assert "qwen2.5-0.5b" in data["model"]
+    assert "message" in data
 
 
 def test_chat_hr_corner_endpoint(client):
     payload = {
         "application": "hr-corner",
         "user_id": 456,
-        "message": "Bagaimana prosedur pengajuan cuti?"
+        "message": "Apa fungsi HR Corner?"
     }
     response = client.post("/api/v1/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["application"] == "hr-corner"
-    assert data["message"] == "AI service is ready."
+    assert data["provider"] == "llama_cpp"
+    assert "qwen2.5-0.5b" in data["model"]
+    assert "message" in data
