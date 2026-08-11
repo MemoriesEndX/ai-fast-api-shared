@@ -23,6 +23,11 @@ class BaseLLMService(ABC):
         """Check LLM backend health status."""
         pass
 
+    @abstractmethod
+    async def generate_explanation(self, system_prompt: str, prompt: str) -> Optional[str]:
+        """Generate text explanation safely (returns None if offline)."""
+        pass
+
 
 class LlamaCppLLMService(BaseLLMService):
     """LLM Service implementation communicating with llama-server via OpenAI-compatible REST API."""
@@ -101,6 +106,33 @@ class LlamaCppLLMService(BaseLLMService):
                     "message": "AI model backend is temporarily unavailable."
                 }
             )
+
+    async def generate_explanation(self, system_prompt: str, prompt: str) -> Optional[str]:
+        """Generate text explanation safely (returns None if offline or error occurs)."""
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.3,
+            "max_tokens": 256,
+        }
+        endpoint = f"{self.base_url}/v1/chat/completions"
+        try:
+            request_timeout = httpx.Timeout(self.timeout, connect=1.5)
+            async with httpx.AsyncClient(timeout=request_timeout) as client:
+                response = await client.post(endpoint, json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    choices = data.get("choices", [])
+                    if choices and len(choices) > 0:
+                        content = choices[0].get("message", {}).get("content", "")
+                        if content and content.strip():
+                            return content.strip()
+        except Exception as exc:
+            logger.warning(f"Failed to generate LLM explanation: {exc}")
+        return None
 
     async def check_health(self) -> Dict[str, Any]:
         """Ping llama-server health endpoint to verify model readiness."""

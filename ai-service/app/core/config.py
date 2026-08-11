@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     MAX_VIDEO_DURATION_SECONDS: int = 3600
     WHISPER_MODEL: str = "tiny"
 
+    # Recommendation Engine Configurable Weights
+    RECOMMENDATION_WEIGHT_DIVISION: float = 30.0
+    RECOMMENDATION_WEIGHT_POSITION: float = 25.0
+    RECOMMENDATION_WEIGHT_GAP: float = 20.0
+    RECOMMENDATION_WEIGHT_ASSESSMENT: float = 15.0
+    RECOMMENDATION_WEIGHT_RELEVANCE: float = 10.0
+    RECOMMENDATION_DEFAULT_LIMIT: int = 5
+    RECOMMENDATION_MAX_LIMIT: int = 50
+
     # Security Keys
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"
