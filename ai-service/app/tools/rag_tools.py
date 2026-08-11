@@ -51,6 +51,8 @@ async def search_pdf_knowledge(
             page_start = c.get("page_start") or c.get("page_number", 1)
             page_end = c.get("page_end") or page_start
             pdf_results.append({
+                "document_id": c.get("document_id") or doc_id_str or "1001",
+                "filename": c.get("filename") or "Dokumen.pdf",
                 "title": c.get("document_title") or c.get("title") or "LMS Document",
                 "text": c.get("chunk_text") or c.get("text") or "",
                 "page_start": page_start,
@@ -61,6 +63,8 @@ async def search_pdf_knowledge(
     # Dev/Mock fallback if no chunks in Qdrant memory during test
     if not pdf_results:
         pdf_results.append({
+            "document_id": doc_id_str or "1001",
+            "filename": "Dokumen.pdf",
             "title": "OWL Safety & APD Guidelines 2026",
             "text": "Pasal 4: Penggunaan Alat Pelindung Diri (APD) seperti helm, sarung tangan, dan sepatu safety wajib dipakai di area produksi.",
             "page_start": 5,
@@ -113,6 +117,7 @@ async def search_video_transcript(
     for c in chunks:
         if c.get("source_type") == "video" or "start_seconds" in c:
             video_results.append({
+                "document_id": c.get("document_id") or doc_id_str or "2001",
                 "title": c.get("document_title") or c.get("title") or "LMS Video",
                 "text": c.get("chunk_text") or c.get("text") or "",
                 "start_seconds": c.get("start_seconds", 0.0),
@@ -124,6 +129,7 @@ async def search_video_transcript(
 
     if not video_results:
         video_results.append({
+            "document_id": doc_id_str or "2001",
             "title": "Safety Induction 101 Video",
             "text": "Demonstrasi simulasi evakuasi darurat dan pemakaian APD di pabrik.",
             "start_seconds": 272.5,
