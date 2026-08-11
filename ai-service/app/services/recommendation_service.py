@@ -354,3 +354,11 @@ class RecommendationEngine:
             explanation_status=explanation_status,
             generated_at=timestamp,
         )
+
+    async def recommend(self, request: RecommendationRequest) -> RecommendationResponse:
+        """Alias for get_recommendations."""
+        return await self.get_recommendations(request)
+
+
+# Singleton Recommendation Engine instance
+recommendation_engine = RecommendationEngine()

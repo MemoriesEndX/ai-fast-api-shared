@@ -35,3 +35,7 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Retrieved source PDF chunk citations with page numbers"
     )
+    tools_used: List[str] = Field(
+        default_factory=list,
+        description="List of MCP tools invoked during answer generation"
+    )

@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -10,6 +11,9 @@ from app.services.pdf_service import PDFService
 from app.services.video_service import VideoService
 from app.services.transcription_service import TranscriptionService
 from app.services.llm_service import BaseLLMService, get_llm_service
+from app.mcp import mcp_server
+from app.mcp.client import MCPClient
+from app.tools.auth import UserAuthContext
 
 logger = logging.getLogger("ai_service.rag")
 
@@ -354,7 +358,7 @@ class RAGService:
         return results
 
     async def chat_completion(self, request: ChatRequest) -> ChatResponse:
-        """Perform RAG Chat completion: Vector Search -> Context Prompt -> LLM -> Response with PDF & Video Time Sources."""
+        """Perform RAG & MCP Tool Chat completion: Vector Search + MCP Tools -> Context Prompt -> LLM -> Response."""
         app_name = str(request.application.value if hasattr(request.application, 'value') else request.application)
         doc_id = str(request.document_id) if request.document_id is not None else None
 
@@ -367,25 +371,90 @@ class RAGService:
             score_threshold=settings.RAG_SCORE_THRESHOLD,
         )
 
-        # 2. Build RAG prompt with retrieved context
+        # 2. Build base RAG prompt with retrieved context
         rag_system, augmented_user_prompt = self.rag_prompt_service.build_rag_prompt(
             application=app_name,
             user_message=request.message,
             context_chunks=context_chunks,
         )
 
-        # 3. Formulate ChatRequest for LLM Service
-        modified_request = ChatRequest(
-            application=app_name,
-            user_id=request.user_id,
-            message=augmented_user_prompt,
-            document_id=doc_id,
-        )
+        tools_used: List[str] = []
+        final_message = ""
+        provider_used = "llama_cpp"
+        model_used = settings.LLM_MODEL
 
-        # 4. Invoke LLM Service
-        llm_response = await self.llm_service.generate_response(modified_request)
+        # 3. Perform MCP Tool Execution Loop if MCP is enabled
+        if settings.MCP_ENABLED:
+            auth_context = UserAuthContext(
+                user_id=int(request.user_id) if str(request.user_id).isdigit() else 123,
+                application=app_name,
+            )
 
-        # 5. Extract sources for citation metadata (PDF page numbers & Video timestamps)
+            current_prompt = augmented_user_prompt
+            tool_call_history = set()
+
+            for iteration in range(settings.MCP_MAX_TOOL_CALLS):
+                modified_request = ChatRequest(
+                    application=app_name,
+                    user_id=request.user_id,
+                    message=current_prompt,
+                    document_id=doc_id,
+                )
+                llm_resp = await self.llm_service.generate_response(modified_request)
+                final_message = llm_resp.message
+                provider_used = llm_resp.provider
+                model_used = llm_resp.model
+
+                tool_call = MCPClient.parse_tool_call(llm_resp.message)
+                if not tool_call:
+                    # Direct answer received (no tool required)
+                    break
+
+                tool_name, tool_args = tool_call
+                call_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+
+                # Loop protection: stop if same tool & args invoked repeatedly
+                if call_signature in tool_call_history:
+                    logger.warning(f"Detected repeated tool call loop for '{tool_name}'. Halting tool loop.")
+                    break
+
+                tool_call_history.add(call_signature)
+                tools_used.append(tool_name)
+
+                # Execute tool via MCP Server
+                tool_result = await mcp_server.execute_tool(tool_name, tool_args, auth_context=auth_context)
+
+                # Feed result back into prompt for next turn
+                current_prompt = (
+                    f"{augmented_user_prompt}\n\n"
+                    f"[TOOL EXECUTED: {tool_name}]\n"
+                    f"Tool Result Data: {json.dumps(tool_result, ensure_ascii=False)}\n\n"
+                    f"Based on the tool output above, provide a clear and helpful response to the user."
+                )
+
+                # Fetch final synthesis answer after tool execution
+                final_request = ChatRequest(
+                    application=app_name,
+                    user_id=request.user_id,
+                    message=current_prompt,
+                    document_id=doc_id,
+                )
+                synth_resp = await self.llm_service.generate_response(final_request)
+                final_message = synth_resp.message
+                break
+        else:
+            modified_request = ChatRequest(
+                application=app_name,
+                user_id=request.user_id,
+                message=augmented_user_prompt,
+                document_id=doc_id,
+            )
+            llm_resp = await self.llm_service.generate_response(modified_request)
+            final_message = llm_resp.message
+            provider_used = llm_resp.provider
+            model_used = llm_resp.model
+
+        # 4. Extract sources for citation metadata
         sources = []
         if context_chunks:
             for chunk in context_chunks:
@@ -408,15 +477,15 @@ class RAGService:
 
                 sources.append(source_item)
 
-        # 6. Check No-Context condition
-        answer_message = llm_response.message
-        if not context_chunks and not sources:
-            answer_message = "Informasi tersebut tidak ditemukan dalam materi yang tersedia."
+        # 5. Check No-Context / Fallback condition if neither RAG nor Tools produced content
+        if not context_chunks and not sources and not tools_used:
+            final_message = "Informasi tersebut tidak ditemukan dalam materi yang tersedia."
 
         return ChatResponse(
             application=app_name,
-            model=llm_response.model,
-            message=answer_message,
-            provider=llm_response.provider,
+            model=model_used,
+            message=final_message,
+            provider=provider_used,
             sources=sources,
+            tools_used=tools_used,
         )

@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     RECOMMENDATION_DEFAULT_LIMIT: int = 5
     RECOMMENDATION_MAX_LIMIT: int = 50
 
+    # LMS API & MCP Configuration (Phase 7)
+    LMS_API_BASE_URL: str = "http://owl-app.local"
+    LMS_API_TOKEN: str = "owl-lms-secret-token"
+    LMS_API_TIMEOUT: float = 10.0
+    MCP_ENABLED: bool = True
+    MCP_MAX_TOOL_CALLS: int = 5
+    TOOL_TIMEOUT: float = 15.0
+
     # Security Keys
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"

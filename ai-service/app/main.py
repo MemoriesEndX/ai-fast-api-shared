@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.logging import LoggingMiddleware, logger
 from app.schemas.common import RootResponse, HealthResponse
 from app.api.v1.router import api_v1_router
+import app.tools  # Register all MCP LMS and RAG tools
 
 app = FastAPI(
     title=settings.APP_NAME,

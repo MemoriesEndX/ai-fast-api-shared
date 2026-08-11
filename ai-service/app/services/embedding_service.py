@@ -74,3 +74,7 @@ class EmbeddingService:
             norm = math.sqrt(sum(x * x for x in vec)) or 1.0
             results.append([round(x / norm, 6) for x in vec])
         return results
+
+
+# Singleton instance
+embedding_service = EmbeddingService()

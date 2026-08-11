@@ -1,0 +1,106 @@
+import logging
+import asyncio
+import time
+import inspect
+from typing import Dict, Any, Optional
+from app.core.config import settings
+from app.mcp.registry import tool_registry, MCPTool
+from app.tools.auth import UserAuthContext, ToolAuthorizationService
+
+logger = logging.getLogger("ai_service.mcp.server")
+
+
+class MCPServer:
+    """MCP Server Dispatcher and Execution Orchestrator."""
+
+    def __init__(self, registry=tool_registry):
+        self.registry = registry
+
+    async def execute_tool(
+        self,
+        name: str,
+        arguments: Dict[str, Any],
+        auth_context: Optional[UserAuthContext] = None,
+    ) -> Dict[str, Any]:
+        """Execute registered MCP tool with strict authorization, timeout, and error sanitization."""
+        start_time = time.time()
+        tool: Optional[MCPTool] = self.registry.get_tool(name)
+
+        if not tool:
+            logger.error(f"Tool '{name}' not found in registry.")
+            return {
+                "error": {
+                    "code": "TOOL_NOT_FOUND",
+                    "message": f"Requested tool '{name}' is not registered in MCP registry.",
+                }
+            }
+
+        # Auth & Tenant Enforcement
+        if tool.requires_auth:
+            if not auth_context:
+                logger.warning(f"Unauthenticated invocation rejected for tool '{name}'.")
+                return {
+                    "error": {
+                        "code": "UNAUTHENTICATED",
+                        "message": "Tool execution requires an authenticated user context.",
+                    }
+                }
+            try:
+                # 1. Enforce tenant isolation
+                ToolAuthorizationService.validate_tenant_access(auth_context, required_application="owl")
+
+                # 2. Enforce user isolation if user_id is provided in arguments
+                if "user_id" in arguments and arguments["user_id"] is not None:
+                    target_user_id = int(arguments["user_id"])
+                    ToolAuthorizationService.validate_user_access(auth_context, target_user_id)
+            except PermissionError as pe:
+                return {
+                    "error": {
+                        "code": "PERMISSION_DENIED",
+                        "message": str(pe),
+                    }
+                }
+
+        # Inject auth_context into handler if requested by signature
+        handler_kwargs = dict(arguments)
+        sig = inspect.signature(tool.handler)
+        if "auth_context" in sig.parameters:
+            handler_kwargs["auth_context"] = auth_context
+
+        # Execute Tool Handler with Timeout
+        timeout = settings.TOOL_TIMEOUT
+        try:
+            if inspect.iscoroutinefunction(tool.handler):
+                result = await asyncio.wait_for(tool.handler(**handler_kwargs), timeout=timeout)
+            else:
+                result = tool.handler(**handler_kwargs)
+
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            logger.info(
+                f"MCP Tool '{name}' executed successfully for user_id={auth_context.user_id if auth_context else 'None'} in {duration_ms} ms."
+            )
+            return result
+
+        except asyncio.TimeoutError:
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            logger.error(f"MCP Tool '{name}' timed out after {timeout} seconds.")
+            return {
+                "error": {
+                    "code": "TOOL_TIMEOUT",
+                    "message": f"Execution of tool '{name}' timed out after {timeout} seconds.",
+                }
+            }
+        except Exception as e:
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            logger.error(f"Error executing MCP tool '{name}': {e}", exc_info=True)
+            # Never expose internal SQL, stack trace, or credentials
+            return {
+                "error": {
+                    "code": "LMS_SERVICE_UNAVAILABLE",
+                    "message": "Learning service tool encountered an error processing your request.",
+                }
+            }
+
+
+# Singleton MCPServer instance
+mcp_server = MCPServer()

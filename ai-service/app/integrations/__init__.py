@@ -1,1 +1,1 @@
-"""Integrations package for external service HTTP clients."""
+"""Integrations package for external services (Laravel LMS API, etc.)."""

@@ -337,3 +337,7 @@ class QdrantService:
             except Exception:
                 pass
         return {"status": "degraded", "service": "qdrant", "url": self.url}
+
+
+# Singleton instance
+qdrant_service = QdrantService()
