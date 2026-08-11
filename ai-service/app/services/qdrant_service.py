@@ -187,10 +187,11 @@ class QdrantService:
         query_vector: List[float],
         application: str,
         document_id: Optional[str] = None,
+        source_type: Optional[str] = None,
         top_k: int = settings.RAG_TOP_K,
         score_threshold: float = settings.RAG_SCORE_THRESHOLD,
     ) -> List[Dict[str, Any]]:
-        """Search similar document or video chunks strictly filtered by application tenant and optional document_id."""
+        """Search similar document or video/audio chunks strictly filtered by application tenant, optional document_id, and optional source_type."""
         self._get_client()
 
         if self.client and self.client != "in_memory":
@@ -208,6 +209,13 @@ class QdrantService:
                         models.FieldCondition(
                             key="document_id",
                             match=models.MatchValue(value=str(document_id)),
+                        )
+                    )
+                if source_type:
+                    must_filters.append(
+                        models.FieldCondition(
+                            key="source_type",
+                            match=models.MatchValue(value=source_type),
                         )
                     )
 
@@ -261,8 +269,9 @@ class QdrantService:
             payload = item["payload"]
             app_match = payload.get("application") == application
             doc_match = True if not document_id else str(payload.get("document_id")) == str(document_id)
+            type_match = True if not source_type else payload.get("source_type") == source_type
 
-            if app_match and doc_match:
+            if app_match and doc_match and type_match:
                 v1 = query_vector
                 v2 = item["vector"]
                 dot = sum(a * b for a, b in zip(v1, v2))
@@ -291,9 +300,157 @@ class QdrantService:
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k]
 
-    async def delete_document(self, application: str, document_id: str) -> bool:
+    async def get_document_metadata(self, application: str, document_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve aggregated document metadata and chunks count by document_id and application."""
+        self._get_client()
+
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                query_filter = models.Filter(
+                    must=[
+                        models.FieldCondition(key="application", match=models.MatchValue(value=application)),
+                        models.FieldCondition(key="document_id", match=models.MatchValue(value=str(document_id))),
+                    ]
+                )
+                res = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=query_filter,
+                    limit=100,
+                )
+                if res and res[0]:
+                    points = res[0]
+                    first = points[0].payload
+                    return {
+                        "document_id": str(document_id),
+                        "application": application,
+                        "title": first.get("title", ""),
+                        "filename": first.get("filename", ""),
+                        "source_type": first.get("source_type", "pdf"),
+                        "status": "COMPLETED",
+                        "document_hash": first.get("document_hash", ""),
+                        "chunks_count": len(points),
+                    }
+            except Exception as e:
+                logger.error(f"Error fetching document metadata from Qdrant: {e}")
+
+        # In-memory fallback check
+        store = self._memory_store.get(self.collection_name, [])
+        matches = [
+            item["payload"] for item in store
+            if item["payload"].get("application") == application and str(item["payload"].get("document_id")) == str(document_id)
+        ]
+        if matches:
+            first = matches[0]
+            return {
+                "document_id": str(document_id),
+                "application": application,
+                "title": first.get("title", ""),
+                "filename": first.get("filename", ""),
+                "source_type": first.get("source_type", "pdf"),
+                "status": "COMPLETED",
+                "document_hash": first.get("document_hash", ""),
+                "chunks_count": len(matches),
+            }
+        return None
+
+    async def list_documents(
+        self,
+        application: str,
+        source_type: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict[str, Any]:
+        """List unique documents indexed under specified application tenant with pagination."""
+        self._get_client()
+        all_docs: Dict[str, Dict[str, Any]] = {}
+
+        if self.client and self.client != "in_memory":
+            try:
+                from qdrant_client.http import models
+                must_filters = [
+                    models.FieldCondition(key="application", match=models.MatchValue(value=application))
+                ]
+                if source_type:
+                    must_filters.append(
+                        models.FieldCondition(key="source_type", match=models.MatchValue(value=source_type))
+                    )
+                query_filter = models.Filter(must=must_filters)
+                res = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=query_filter,
+                    limit=500,
+                )
+                if res and res[0]:
+                    for point in res[0]:
+                        p = point.payload
+                        doc_id = str(p.get("document_id"))
+                        if doc_id not in all_docs:
+                            all_docs[doc_id] = {
+                                "document_id": doc_id,
+                                "application": application,
+                                "title": p.get("title", ""),
+                                "filename": p.get("filename", ""),
+                                "source_type": p.get("source_type", "pdf"),
+                                "status": "COMPLETED",
+                                "document_hash": p.get("document_hash", ""),
+                                "chunks_count": 1,
+                            }
+                        else:
+                            all_docs[doc_id]["chunks_count"] += 1
+            except Exception as e:
+                logger.error(f"Error scrolling documents in Qdrant: {e}")
+
+        # In-memory fallback listing
+        if not all_docs:
+            store = self._memory_store.get(self.collection_name, [])
+            for item in store:
+                p = item["payload"]
+                if p.get("application") == application:
+                    if source_type and p.get("source_type") != source_type:
+                        continue
+                    doc_id = str(p.get("document_id"))
+                    if doc_id not in all_docs:
+                        all_docs[doc_id] = {
+                            "document_id": doc_id,
+                            "application": application,
+                            "title": p.get("title", ""),
+                            "filename": p.get("filename", ""),
+                            "source_type": p.get("source_type", "pdf"),
+                            "status": "COMPLETED",
+                            "document_hash": p.get("document_hash", ""),
+                            "chunks_count": 1,
+                        }
+                    else:
+                        all_docs[doc_id]["chunks_count"] += 1
+
+        doc_list = list(all_docs.values())
+        if status_filter:
+            doc_list = [d for d in doc_list if d["status"].upper() == status_filter.upper()]
+
+        total = len(doc_list)
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated = doc_list[start_idx:end_idx]
+
+        return {
+            "application": application,
+            "page": page,
+            "page_size": page_size,
+            "total_documents": total,
+            "documents": paginated,
+        }
+
+    async def delete_document(self, application: str, document_id: str) -> Dict[str, Any]:
         """Delete all vector points belonging to a specific document_id under a given application."""
         self._get_client()
+        deleted_count = 0
+
+        # Count chunks prior to deletion
+        meta = await self.get_document_metadata(application, document_id)
+        if meta:
+            deleted_count = meta.get("chunks_count", 0)
 
         if self.client and self.client != "in_memory":
             try:
@@ -314,18 +471,23 @@ class QdrantService:
                     collection_name=self.collection_name,
                     points_selector=models.FilterSelector(filter=delete_filter),
                 )
-                logger.info(f"Deleted document {document_id} under app {application} from Qdrant.")
-                return True
+                logger.info(f"Deleted document {document_id} ({deleted_count} chunks) under app {application} from Qdrant.")
+                return {"success": True, "deleted_chunks": deleted_count}
             except Exception as e:
                 logger.error(f"Error deleting document from Qdrant: {e}")
 
         # In-memory deletion fallback
         if self.collection_name in self._memory_store:
+            original_len = len(self._memory_store[self.collection_name])
             self._memory_store[self.collection_name] = [
                 item for item in self._memory_store[self.collection_name]
                 if not (item["payload"].get("application") == application and str(item["payload"].get("document_id")) == str(document_id))
             ]
-        return True
+            new_len = len(self._memory_store[self.collection_name])
+            if deleted_count == 0:
+                deleted_count = original_len - new_len
+
+        return {"success": True, "deleted_chunks": deleted_count}
 
     async def check_health(self) -> Dict[str, Any]:
         """Check Qdrant server connection health status."""
@@ -341,3 +503,4 @@ class QdrantService:
 
 # Singleton instance
 qdrant_service = QdrantService()
+

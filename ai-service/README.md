@@ -75,6 +75,12 @@ Designed to serve as the unified, secure AI infrastructure layer for **OWL (Lear
 | `POST` | `/api/v1/chat` | Bearer Token | `owl`, `hr-corner` | Unified AI Agent multi-tenant completion | Active |
 | `POST` | `/api/v1/recommendations` | Bearer Token | `owl` | Deterministic learning recommendation ranking | Active |
 | `GET` | `/api/v1/tools` | Bearer Token | All | List registered MCP tools & input schemas | Active |
+| `POST` | `/api/v1/knowledge/documents` | Bearer Token | `owl`, `hr-corner` | Ingest Knowledge Document (PDF, Video, Audio) | Active |
+| `POST` | `/api/v1/knowledge/search` | Bearer Token | `owl`, `hr-corner` | Direct Knowledge Vector Search | Active |
+| `GET` | `/api/v1/knowledge/documents/{id}` | Bearer Token | `owl`, `hr-corner` | Get Knowledge Document Details & Status | Active |
+| `GET` | `/api/v1/knowledge/documents` | Bearer Token | `owl`, `hr-corner` | List Knowledge Documents for Tenant | Active |
+| `DELETE`| `/api/v1/knowledge/documents/{id}` | Bearer Token | `owl`, `hr-corner` | Delete Knowledge Document & Vectors | Active |
+| `POST` | `/api/v1/knowledge/documents/{id}/reindex` | Bearer Token | `owl`, `hr-corner` | Atomic Reindex Knowledge Document | Active |
 | `POST` | `/api/v1/rag/videos/upload` | Bearer Token | `owl`, `hr-corner` | Video ingestion (FFmpeg + Whisper + Qdrant) | Active |
 | `GET` | `/api/v1/rag/videos/{doc_id}/status`| Bearer Token | `owl`, `hr-corner` | Video transcription status check | Active |
 | `POST` | `/api/v1/rag/videos/{doc_id}/reindex`| Bearer Token | `owl`, `hr-corner` | Video document re-indexing | Active |
@@ -86,14 +92,55 @@ Designed to serve as the unified, secure AI infrastructure layer for **OWL (Lear
 
 ---
 
+## 📚 Knowledge Management & Ingestion API (Phase 11)
+
+### 1. Ingest Knowledge Document (PDF, Video, Audio)
+```bash
+curl -X POST "http://localhost:8000/api/v1/knowledge/documents" \
+  -H "Authorization: Bearer owl-secret-api-key" \
+  -F "file=@training_module.pdf" \
+  -F "title=Training Module Laravel 2026" \
+  -F "application=owl" \
+  -F "document_id=pdf-mod-101" \
+  -F "source_type=pdf"
+```
+
+### 2. Direct Knowledge Vector Search
+```bash
+curl -X POST "http://localhost:8000/api/v1/knowledge/search" \
+  -H "Authorization: Bearer owl-secret-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "application": "owl",
+    "query": "APD helm keselamatan",
+    "source_type": "pdf",
+    "top_k": 5
+  }'
+```
+
+### 3. List Knowledge Documents for Tenant
+```bash
+curl -X GET "http://localhost:8000/api/v1/knowledge/documents?application=owl&page=1&page_size=20" \
+  -H "Authorization: Bearer owl-secret-api-key"
+```
+
+### 4. Delete Knowledge Document & Vectors
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/knowledge/documents/pdf-mod-101?application=owl" \
+  -H "Authorization: Bearer owl-secret-api-key"
+```
+
+---
+
 ## 🔒 Production Hardening & Reliability Features
 
 1. **Strict 3-Container Deployment**: Enforces `ai-service`, `llama-server`, `qdrant` without adding extra containers or heavy middleware.
 2. **Non-Root Execution**: `Dockerfile` runs as unprivileged `appuser:10001` user and group.
 3. **Log Rotation**: Docker Compose configures `json-file` log driver with `max-size: 10m` and `max-file: 3`.
-4. **Temporary File Management**: Video processing ensures `try...finally` deletion of temporary audio extraction directories (`/tmp/ai_video_*`).
+4. **Temporary File Management**: Video and audio processing ensure `try...finally` deletion of temporary extraction directories (`/tmp/ai_*`).
 5. **Healthcheck Dependencies**: `ai-service` startup depends on `llama-server` and `qdrant` reaching healthy states (`condition: service_healthy`).
 6. **Production Runbooks**: Complete `DEPLOYMENT.md` and `ROLLBACK.md` guides provided for production deployment, data snapshotting, and disaster recovery.
+
 
 ---
 

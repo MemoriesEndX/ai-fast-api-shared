@@ -10,8 +10,8 @@ logger = logging.getLogger("ai_service.utils.security_validation")
 PATH_TRAVERSAL_PATTERN = re.compile(r"(\.\.[/\\])|([/\\]etc[/\\])|(^[a-zA-Z]:[/\\])|(file://)", re.IGNORECASE)
 
 ALLOWED_PDF_EXTENSIONS: Set[str] = {".pdf"}
-ALLOWED_VIDEO_EXTENSIONS: Set[str] = {".mp4", ".avi", ".mov", ".mkv"}
-ALLOWED_AUDIO_EXTENSIONS: Set[str] = {".wav", ".mp3", ".m4a"}
+ALLOWED_VIDEO_EXTENSIONS: Set[str] = {".mp4", ".webm", ".mkv", ".mov", ".avi"}
+ALLOWED_AUDIO_EXTENSIONS: Set[str] = {".mp3", ".wav", ".m4a"}
 
 
 def sanitize_filename(filename: str) -> str:
@@ -45,8 +45,8 @@ def validate_upload_file(filename: str, file_bytes: bytes, allowed_extensions: S
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
-                "code": "INVALID_FILE_TYPE" if category == "pdf" else ("INVALID_VIDEO_FORMAT" if category == "video" else "INVALID_FILE_TYPE"),
-                "message": f"Unsupported file type '{ext}'. Allowed extensions: {', '.join(allowed_extensions)}"
+                "code": "UNSUPPORTED_FILE_TYPE" if category == "audio" else ("INVALID_FILE_TYPE" if category == "pdf" else ("INVALID_VIDEO_FORMAT" if category == "video" else "INVALID_FILE_TYPE")),
+                "message": f"Unsupported file type '{ext}'. Allowed extensions: {', '.join(sorted(allowed_extensions))}"
             }
         )
 
@@ -55,7 +55,7 @@ def validate_upload_file(filename: str, file_bytes: bytes, allowed_extensions: S
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
-                "code": "EMPTY_FILE" if category == "pdf" else ("EMPTY_VIDEO_FILE" if category == "video" else "EMPTY_FILE"),
+                "code": "EMPTY_FILE",
                 "message": f"Uploaded {category} file is empty (0 bytes)."
             }
         )
