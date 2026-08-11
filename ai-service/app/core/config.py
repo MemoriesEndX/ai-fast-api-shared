@@ -43,14 +43,16 @@ class Settings(BaseSettings):
     MAX_VIDEO_DURATION_SECONDS: int = 3600
     WHISPER_MODEL: str = "tiny"
 
-    # Recommendation Engine Configurable Weights
-    RECOMMENDATION_WEIGHT_DIVISION: float = 30.0
-    RECOMMENDATION_WEIGHT_POSITION: float = 25.0
-    RECOMMENDATION_WEIGHT_GAP: float = 20.0
-    RECOMMENDATION_WEIGHT_ASSESSMENT: float = 15.0
-    RECOMMENDATION_WEIGHT_RELEVANCE: float = 10.0
+    # Recommendation Engine Configurable Weights (Phase 12 — 2.0 Normalized)
+    RECOMMENDATION_WEIGHT_DIVISION: float = 0.20
+    RECOMMENDATION_WEIGHT_ROLE: float = 0.20
+    RECOMMENDATION_WEIGHT_SEMANTIC: float = 0.25
+    RECOMMENDATION_WEIGHT_CLASSIFICATION: float = 0.15
+    RECOMMENDATION_WEIGHT_ASSESSMENT: float = 0.10
+    RECOMMENDATION_WEIGHT_PROGRESS: float = 0.10
     RECOMMENDATION_DEFAULT_LIMIT: int = 5
     RECOMMENDATION_MAX_LIMIT: int = 50
+
 
     # LMS API & MCP Configuration (Phase 7 & 8)
     LMS_API_BASE_URL: str = "http://owl-app.local"

@@ -40,6 +40,7 @@ async def get_learning_recommendations(user_id: int, limit: int = 5, auth_contex
     in_progress = [{"id": item["content_id"], "progress": item.get("progress", 0)} for item in progress_items if item.get("finish") != 1 and item.get("progress", 0) < 100]
 
     # 3. Assemble candidates
+    app_tenant = auth_context.application if auth_context else "owl"
     candidates = []
     for c in content_catalog.get("items", []):
         candidates.append(
@@ -49,6 +50,7 @@ async def get_learning_recommendations(user_id: int, limit: int = 5, auth_contex
                 title=c["title"],
                 classification_name=c.get("classification_name"),
                 active=c.get("active", "Active"),
+                application=app_tenant,
             )
         )
     for p in playlist_catalog.get("items", []):
@@ -59,8 +61,10 @@ async def get_learning_recommendations(user_id: int, limit: int = 5, auth_contex
                 title=p["title"],
                 classification_name=p.get("classification_name"),
                 active=p.get("active", "Active"),
+                application=app_tenant,
             )
         )
+
 
     # 4. Construct RecommendationRequest
     user_schema = UserProfileSchema(
