@@ -40,7 +40,8 @@ class IntentRouter:
         # 1. Recommendation Intent
         if any(k in msg_lower for k in [
             "cocok", "rekomendasi", "disarankan", "sebaiknya saya ambil", "saran pembelajaran", "rekomendasikan",
-            "belajar apa berikutnya", "materi selanjutnya", "bantu saya memilih", "pilihlah modul", "saran belajar"
+            "belajar apa berikutnya", "materi selanjutnya", "bantu saya memilih", "pilihlah modul", "saran belajar",
+            "modul apa selanjutnya", "meningkatkan keterampilan", "prioritas"
         ]):
             intents.append(AgentIntent.RECOMMENDATION)
             tools.extend([
@@ -51,7 +52,10 @@ class IntentRouter:
             ])
 
         # 2. LMS Progress Intent
-        if any(k in msg_lower for k in ["progress", "kemajuan", "sudah belajar", "progres", "sudah selesai", "sedang saya ikuti", "sedang dipelajari"]):
+        if any(k in msg_lower for k in [
+            "progress", "kemajuan", "sudah belajar", "progres", "sudah selesai", "selesaikan", "sedang saya ikuti",
+            "sedang dipelajari", "status pembelajaran", "status belajar"
+        ]):
             if AgentIntent.RECOMMENDATION not in intents:
                 intents.append(AgentIntent.LMS_PROGRESS)
                 tools.append("get_learning_progress")
@@ -75,18 +79,19 @@ class IntentRouter:
         # 6. PDF Knowledge RAG Intent
         if any(k in msg_lower for k in [
             "aturan", "dokumen", "kebijakan", "policy", "standar", "sop", "pasal", "pdf", "file", "safety policy",
-            "apd", "panduan", "ketentuan", "sanksi", "jarak aman", "kewajiban pekerja", "persyaratan", "prosedur"
+            "apd", "panduan", "ketentuan", "sanksi", "jarak aman", "kewajiban pekerja", "persyaratan", "prosedur",
+            "ijin kerja", "area terbatas", "confined space", "beban maksimal", "angkat manual", "near-miss", "pelaporan kecelakaan"
         ]):
             if AgentIntent.VIDEO_KNOWLEDGE not in intents or any(x in msg_lower for x in ["apd", "policy", "dokumen", "pdf"]):
                 intents.append(AgentIntent.PDF_KNOWLEDGE)
                 tools.append("search_pdf_knowledge")
 
         # 7. Content / Playlist Search & Details Intent
-        if any(k in msg_lower for k in ["cari modul", "cari materi", "cari konten", "search content"]):
+        if any(k in msg_lower for k in ["cari modul", "cari materi", "cari konten", "search content", "cari pelatihan", "pelatihan", "kursus"]):
             intents.append(AgentIntent.CONTENT_SEARCH)
             tools.append("search_learning_content")
 
-        if any(k in msg_lower for k in ["cari playlist", "playlist apa saja", "daftar playlist"]):
+        if any(k in msg_lower for k in ["cari playlist", "playlist apa saja", "daftar playlist", "training plan"]):
             intents.append(AgentIntent.PLAYLIST_SEARCH)
             tools.append("search_learning_playlist")
 
@@ -94,9 +99,10 @@ class IntentRouter:
             intents.append(AgentIntent.CONTENT_DETAIL)
             tools.append("get_content_detail")
 
-        if "detail playlist" in msg_lower or "isi playlist" in msg_lower:
+        if "detail playlist" in msg_lower or "isi playlist" in msg_lower or "materi dalam playlist" in msg_lower:
             intents.append(AgentIntent.PLAYLIST_DETAIL)
             tools.append("get_playlist_detail")
+
 
         # Fallback if specific document_id scoping is provided
         if document_id is not None and "search_pdf_knowledge" not in tools and "search_video_transcript" not in tools:

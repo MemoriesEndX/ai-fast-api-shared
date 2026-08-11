@@ -150,23 +150,21 @@ curl -X DELETE "http://localhost:8000/api/v1/knowledge/documents/pdf-mod-101?app
 - **Phase 8 50-Question Model Evaluation**: `50 / 50 PASSED (100% Accuracy)`
 - **Phase 9 REST API Hardening Tests**: `10 / 10 PASSED`
 - **Phase 10 Production Hardening Tests**: `8 / 8 PASSED`
-- **Combined Pytest Suite**: **`92 PASSED / 0 FAILED (100% Pass Rate)`**
+- **Phase 11 Knowledge Management Tests**: `13 / 13 PASSED`
+- **Phase 12 Recommendation 2.0 Tests**: `11 / 11 PASSED`
+- **Phase 13 AI Evaluation Framework**: `100 / 100 Golden Cases PASSED (100% Pass Rate)`
+- **Combined Pytest Suite**: **`124 PASSED / 0 FAILED (100% Pass Rate)`**
 
 ---
 
-## 💻 Sample API Call (cURL)
+## 💻 Sample Evaluation CLI Call
 
 ```bash
-curl -X POST \
-  "http://localhost:8000/api/v1/chat" \
-  -H "Authorization: Bearer owl-secret-api-key" \
-  -H "X-Request-ID: trace-req-12345" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "application": "owl",
-    "user_id": 123,
-    "message": "Pembelajaran apa yang cocok untuk posisi saya saat ini?"
-  }'
+# Run full 100-case evaluation framework
+python -m app.evaluation.runner
+
+# Run specific evaluation category or tenant
+python -m app.evaluation.runner --category security --application owl
 ```
 
 ---
@@ -174,14 +172,18 @@ curl -X POST \
 ## 🗺 Implementation Roadmap
 
 ```text
-[x] PHASE 1 : FastAPI Foundation, Docker setup & Architecture Scaffolding
-[x] PHASE 2 : llama-server + Qwen2.5 0.5B GGUF Integration
-[x] PHASE 3 : Vector Database (Qdrant) Integration
-[x] PHASE 4 : Document & PDF RAG Engine
-[x] PHASE 5 : Video & Audio Transcription (Whisper)
-[x] PHASE 6 : OWL Learning Recommendation Engine
-[x] PHASE 7 : MCP / LMS Tools Integration
-[x] PHASE 8 : Unified OWL LMS AI Agent
-[x] PHASE 9 : REST API Hardening & Shared API Contract
-[x] PHASE 10 : Production Hardening & Deployment Reliability (COMPLETED)
+[x] PHASE 1  : FastAPI Foundation, Docker setup & Architecture Scaffolding
+[x] PHASE 2  : llama-server + Qwen2.5 0.5B GGUF Integration
+[x] PHASE 3  : Vector Database (Qdrant) Integration
+[x] PHASE 4  : Document & PDF RAG Engine
+[x] PHASE 5  : Video & Audio Transcription (Whisper)
+[x] PHASE 6  : OWL Learning Recommendation Engine
+[x] PHASE 7  : MCP / LMS Tools Integration
+[x] PHASE 8  : Unified OWL LMS AI Agent
+[x] PHASE 9  : REST API Hardening & Shared API Contract
+[x] PHASE 10 : Production Hardening & Deployment Reliability
+[x] PHASE 11 : Knowledge Management (Multi-Format Indexing & Search)
+[x] PHASE 12 : Personalized Learning Recommendation 2.0
+[x] PHASE 13 : AI Evaluation & Quality Benchmarking (COMPLETED)
 ```
+
