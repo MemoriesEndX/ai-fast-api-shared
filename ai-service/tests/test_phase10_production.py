@@ -32,9 +32,10 @@ def test_readiness_probe():
 def test_dockerfile_and_compose_hardening():
     """Verify production hardening files (.dockerignore, DEPLOYMENT.md, ROLLBACK.md) exist."""
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    docs_dir = os.path.join(base_dir, "docs")
     assert os.path.exists(os.path.join(base_dir, ".dockerignore")), ".dockerignore missing!"
-    assert os.path.exists(os.path.join(base_dir, "DEPLOYMENT.md")), "DEPLOYMENT.md missing!"
-    assert os.path.exists(os.path.join(base_dir, "ROLLBACK.md")), "ROLLBACK.md missing!"
+    assert os.path.exists(os.path.join(docs_dir, "DEPLOYMENT.md")) or os.path.exists(os.path.join(base_dir, "DEPLOYMENT.md")), "DEPLOYMENT.md missing!"
+    assert os.path.exists(os.path.join(docs_dir, "ROLLBACK.md")) or os.path.exists(os.path.join(base_dir, "ROLLBACK.md")), "ROLLBACK.md missing!"
     assert os.path.exists(os.path.join(base_dir, "docker-compose.yml")), "docker-compose.yml missing!"
 
 
