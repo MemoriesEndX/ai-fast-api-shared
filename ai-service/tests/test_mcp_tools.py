@@ -192,7 +192,7 @@ def test_chat_with_mcp_tool_execution():
         "user_id": 123,
         "message": "Pembelajaran apa yang cocok untuk saya?",
     }
-    response = client.post("/api/v1/chat", json=payload)
+    response = client.post("/api/v1/chat", json=payload, headers=owl_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["application"] == "owl"

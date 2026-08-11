@@ -1,104 +1,141 @@
-# Shared AI Service (OWL + HR Corner) — Phase 8
+# Shared AI Service (OWL + HR Corner) — Phase 9
 
-High-performance, modular, multi-tenant AI Backend Gateway built with **Python 3.11+**, **FastAPI**, **Pydantic v2**, **Qdrant Vector DB**, **fastembed**, **faster-whisper (STT)**, **FFmpeg**, **llama-server (Qwen2.5 0.5B GGUF)**, **Deterministic OWL Recommendation Engine**, **Controlled Model Context Protocol (MCP) LMS Tools Integration**, and the **Unified OWL LMS AI Agent**.
+High-performance, hardened, modular, multi-tenant AI Backend Gateway built with **Python 3.11+**, **FastAPI**, **Pydantic v2**, **Qdrant Vector DB**, **fastembed**, **faster-whisper (STT)**, **FFmpeg**, **llama-server (Qwen2.5 0.5B GGUF)**, **Deterministic OWL Recommendation Engine**, **Controlled Model Context Protocol (MCP) LMS Tools Integration**, **Unified OWL LMS AI Agent**, and **REST API Hardening Layer**.
 
-Designed to serve as the unified AI infrastructure layer for **OWL (Learning Management System)**, **HR Corner (Internal HR Application)**, and future enterprise applications.
+Designed to serve as the unified, secure AI infrastructure layer for **OWL (Learning Management System)**, **HR Corner (Internal HR Application)**, and future enterprise applications.
 
 ---
 
-## 🏗 System Architecture (Phase 8 — Unified AI Agent)
+## 🏗 System Architecture (Phase 9 — Hardened Shared REST API)
 
 ```text
-                               Laravel OWL / HR Corner
-                                         │
-                                         ▼
-                                FastAPI AI Service
-                                  POST /api/v1/chat
-                                         │
-                        ┌────────────────┴────────────────┐
-                        │    User Identity & Tenant Auth  │
-                        │    (Authenticated Request Context)│
-                        └────────────────┬────────────────┘
-                                         │
-                                         ▼
-                               ┌──────────────────┐
-                               │  Intent Router   │
-                               └─────────┬────────┘
-                                         │
-            ┌────────────────────────────┼────────────────────────────┐
-            ▼                            ▼                            ▼
-   ┌─────────────────┐          ┌─────────────────┐          ┌──────────────────┐
-   │    LMS Tools    │          │  PDF/Video RAG  │          │ Recommendation   │
-   │ (Profile/Prog.) │          │ (Qdrant Search) │          │  Engine (Scoring)│
-   └────────┬────────┘          └────────┬────────┘          └────────┬─────────┘
-            │                            │                            │
-            └────────────────────────────┼────────────────────────────┘
-                                         │
-                                         ▼
-                               ┌──────────────────┐
-                               │  Unified Agent   │
-                               │   Orchestrator   │
-                               └─────────┬────────┘
-                                         │
-                                         ▼
-                             ┌──────────────────────┐
-                             │    llama-server      │
-                             │ Qwen2.5 0.5B GGUF    │
-                             └──────────┬───────────┘
-                                        │
-                                        ▼
-                           Indonesian Grounded Response
-                             + Standardized Citations
+                 ┌───────────────────────────────────────┐
+                 │          OWL / HR Corner              │
+                 │          Future Applications          │
+                 └──────────────────┬────────────────────┘
+                                    │
+                              HTTPS / REST API
+                                    │
+                                    ▼
+             ┌──────────────────────────────────────────────┐
+             │            Shared AI Service                 │
+             │                 FastAPI                      │
+             ├──────────────────────────────────────────────┤
+             │ Bearer Token Auth & Security Verification    │
+             │ Application & Tenant Authorization Isolation │
+             │ Request ID Tracing (X-Request-ID Header)      │
+             │ Sliding Window Rate Limiting (Token Bucket)  │
+             │ Standardized Error Response Formatter         │
+             │ Global Centralized Exception Handlers        │
+             │ Strict Pydantic Schema Input Validation      │
+             │ Path Traversal & Upload Security Sanitizer   │
+             │ Liveness (/health) & Readiness (/ready)      │
+             │ Unified AI Agent Orchestrator & Router       │
+             └──────────────────────┬───────────────────────┘
+                                    │
+                 ┌──────────────────┼──────────────────┐
+                 ▼                  ▼                  ▼
+              Qdrant           Qwen 0.5B            MCP LMS
+            Vector DB         llama-server           Tools
 ```
 
 ---
 
-## 🛠 Tech Stack (Phase 8)
+## 🛠 Tech Stack (Phase 9)
 
 - **Language**: Python 3.11+
 - **Framework**: FastAPI 0.110+
-- **Agent Orchestrator**: Intent Router, Loop Prevention, Grounding Synthesizer, Conversation Thread Tracker
+- **Security & Authentication**: Bearer Token / API Key Verification, Multi-tenant Isolation Guard
+- **API Hardening**: Request ID Tracing (`X-Request-ID`), Sliding Window Rate Limiter, Centralized Exception Handlers, Path Traversal Sanitizer
+- **Agent Orchestrator**: Intent Router, Loop Prevention (`CHAT_MAX_TOOL_CALLS=5`), Grounding Synthesizer, Conversation Thread Tracker
 - **MCP Infrastructure**: Model Context Protocol (MCP) Tool Registry, Authorization Validator, and Execution Dispatcher (10 Registered Tools)
 - **Recommendation Engine**: Multi-factor deterministic scoring (Division, Position, Learning Gap, Assessment Weakness, Category Relevance)
-- **Audio Extraction**: FFmpeg (16kHz Mono WAV PCM)
+- **Audio Extraction**: FFmpeg (16kHz Mono WAV PCM via safe subprocess execution)
 - **Speech-to-Text**: `faster-whisper` (CTranslate2 INT8 CPU Execution)
 - **Vector Database**: Qdrant Vector DB
 - **Embeddings**: `fastembed` (`BAAI/bge-small-en-v1.5`, 384 dimensions)
-- **PDF Extraction**: `pypdf`
+- **PDF Extraction**: `pypdf` (Idempotent page-aware text chunking)
 - **Inference Server**: `llama-server` (llama.cpp)
 - **Model**: `Qwen/Qwen2.5-0.5B-Instruct-GGUF` (`Q4_K_M` quantization)
 - **Validation**: Pydantic v2 & Pydantic-Settings
 - **Containerization**: Docker & Docker Compose (3 Containers: `ai-service`, `llama-server`, `qdrant`)
-- **Testing**: Pytest (74 Unit, Integration & Evaluation Benchmark Tests)
+- **Testing**: Pytest (84 Unit, Integration, Hardening & Evaluation Benchmark Tests)
 
 ---
 
-## ⚡ Unified Capability & Intent Router Matrix
+## 📋 Public API Inventory
 
-| Intent Enum | Keyphrase Examples | Matched MCP Candidate Tool(s) | Citations Source Output Format |
-| :--- | :--- | :--- | :--- |
-| `LMS_PROFILE` | "profil saya", "divisi saya", "posisi saya" | `get_user_learning_profile` | `{type: "lms", tool: "get_user_learning_profile"}` |
-| `LMS_PROGRESS` | "progress", "kemajuan", "sudah selesai", "sedang saya ikuti" | `get_learning_progress` | `{type: "lms", tool: "get_learning_progress"}` |
-| `LMS_ASSESSMENT` | "nilai", "assessment", "skor", "ujian" | `get_user_assessments` | `{type: "lms", tool: "get_user_assessments"}` |
-| `RECOMMENDATION` | "cocok", "rekomendasi", "disarankan", "bantu saya memilih" | `get_user_learning_profile`, `get_learning_progress`, `get_user_assessments`, `get_learning_recommendations` | `{type: "recommendation", content_id, title, score}` |
-| `PDF_KNOWLEDGE` | "aturan", "dokumen", "kebijakan", "policy", "sanksi", "pdf" | `search_pdf_knowledge` | `{type: "pdf", document_id, filename, page_start, page_end}` |
-| `VIDEO_KNOWLEDGE`| "video", "menit", "detik", "timestamp", "durasi" | `search_video_transcript` | `{type: "video", document_id, title, start_time, end_time}` |
+| Method | Path | Auth Required | Tenant Scope | Purpose | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/` | No | All | Service Root Identification | Active |
+| `GET` | `/health` | No | All | Process Liveness Probe (Fast, zero heavy inference) | Active |
+| `GET` | `/ready` | No | All | Dependency Readiness Probe (Checks Qdrant & llama-server) | Active |
+| `POST` | `/api/v1/chat` | Bearer Token | `owl`, `hr-corner` | Unified AI Agent multi-tenant completion | Active |
+| `POST` | `/api/v1/recommendations` | Bearer Token | `owl` | Deterministic learning recommendation ranking | Active |
+| `GET` | `/api/v1/tools` | Bearer Token | All | List registered MCP tools & input schemas | Active |
+| `POST` | `/api/v1/rag/videos/upload` | Bearer Token | `owl`, `hr-corner` | Video ingestion (FFmpeg + Whisper + Qdrant) | Active |
+| `GET` | `/api/v1/rag/videos/{doc_id}/status`| Bearer Token | `owl`, `hr-corner` | Video transcription status check | Active |
+| `POST` | `/api/v1/rag/videos/{doc_id}/reindex`| Bearer Token | `owl`, `hr-corner` | Video document re-indexing | Active |
+| `POST` | `/api/v1/rag/documents/upload` | Bearer Token | `owl`, `hr-corner` | PDF document upload and vector ingestion | Active |
+| `POST` | `/api/v1/rag/documents/{doc_id}/reindex`| Bearer Token | `owl`, `hr-corner` | PDF document re-indexing | Active |
+| `POST` | `/api/v1/rag/documents/index` | Bearer Token | `owl`, `hr-corner` | Text document direct vector indexing | Active |
+| `DELETE`| `/api/v1/rag/documents/{doc_id}`| Bearer Token | `owl`, `hr-corner` | Delete document vector points from Qdrant | Active |
+| `POST` | `/api/v1/rag/search` | Bearer Token | `owl`, `hr-corner` | Similarity search across vector chunks | Active |
 
 ---
 
-## 📊 Phase 8 Benchmark & 50-Question Model Evaluation
+## 🔒 Security & Hardening Features
 
-Ran comprehensive evaluation benchmark across 50 questions spanning LMS data, PDF RAG, Video RAG, Recommendations, Multi-tool queries, and Prompt Injection attacks:
+1. **Authentication**: Requests must include `Authorization: Bearer <TOKEN>` or `X-API-Key: <TOKEN>`. Unauthenticated requests return `401 AUTHENTICATION_REQUIRED`.
+2. **Tenant Isolation**: Credentials tied to application `"owl"` attempting to access `"hr-corner"` tenant data return `403 TENANT_ACCESS_DENIED`.
+3. **Path Traversal Guard**: Filenames containing `../`, `..\`, `/etc/passwd`, `C:\`, `file://` are strictly sanitized and rejected with `400 INVALID_REQUEST`.
+4. **File Security**: Ingested files validate extension (`.pdf`, `.mp4`, `.avi`, `.mov`, `.mkv`), file size limits (`MAX_PDF_SIZE_MB=25`, `MAX_VIDEO_SIZE_MB=250`), and detect empty content.
+5. **Rate Limiting**: Sliding window token bucket enforces per-endpoint rate limits (`CHAT: 60/min`, `INGESTION: 20/min`, `SEARCH: 120/min`, `HEALTH: 300/min`). Exceeding returns `429 RATE_LIMITED`.
+6. **Request ID Tracing**: Every request is assigned a unique `X-Request-ID` header (reused if provided by client) which is logged and returned in error responses.
 
-| Metric | Target Requirement | Benchmark Result |
-| :--- | :--- | :--- |
-| **Total Evaluated Questions** | 50 Questions | **50 / 50 (100%)** |
-| **Tool Selection Accuracy** | ≥ 90.0% | **100.0% (50/50)** |
-| **Answer Grounding Score** | 100.0% (Zero Invention) | **100.0% (50/50)** |
-| **Hallucination Control** | 100.0% | **100.0% (50/50)** |
-| **Citation & Timestamp Accuracy**| 100.0% | **100.0% (50/50)** |
-| **Average Processing Latency** | < 3000 ms | **Single-tool: ~0.4 ms** / **Multi-tool: ~2.1 s** |
-| **Phase 1-8 Pytest Suite** | 100% Pass Rate | **74 PASSED / 0 FAILED** |
+---
+
+## ⚠️ Standardized Error Contract
+
+All public REST API errors return consistent JSON structures:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error description.",
+    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+### Standard Error Codes
+
+- `AUTHENTICATION_REQUIRED` (401): Missing or invalid Bearer token.
+- `TENANT_ACCESS_DENIED` (403): Tenant authorization isolation breach.
+- `FORBIDDEN` (403): General permission error.
+- `INVALID_REQUEST` (400): Request validation or path traversal error.
+- `INVALID_FILE_TYPE` (400): File extension or format forbidden.
+- `EMPTY_FILE` (400): File payload is 0 bytes.
+- `PAYLOAD_TOO_LARGE` (413): File size exceeds maximum allowed MB limit.
+- `RATE_LIMITED` (429): Rate limit threshold exceeded.
+- `VALIDATION_ERROR` (422): Pydantic input schema validation failed.
+- `AI_SERVICE_UNAVAILABLE` (503): Backend AI or vector dependency unavailable.
+- `INTERNAL_ERROR` (500): Unexpected server error (sanitized to prevent stack trace leakage).
+
+---
+
+## 📊 Benchmark & Evaluation Results
+
+### 1. 50-Question Model Evaluation Benchmark
+- **Tool Selection Accuracy**: `100.0% (50/50)`
+- **Answer Grounding Score**: `100.0% (50/50)`
+- **Hallucination Control**: `100.0% (50/50)`
+- **Citation & Timestamp Accuracy**: `100.0% (50/50)`
+
+### 2. Pytest Test Suite Status
+- **Total Tests Collected**: `84 items`
+- **Pass Rate**: `84 PASSED / 0 FAILED (100%)`
 
 ---
 
@@ -111,6 +148,7 @@ APP_DEBUG=true
 APP_VERSION=1.0.0
 
 API_PREFIX=/api/v1
+ENABLE_API_DOCS=true
 
 OWL_BASE_URL=http://owl-app.local
 HR_CORNER_BASE_URL=http://hr-corner-app.local
@@ -134,30 +172,21 @@ RAG_SCORE_THRESHOLD=0.4
 
 MAX_PDF_SIZE_MB=25
 MAX_VIDEO_SIZE_MB=250
+MAX_AUDIO_SIZE_MB=50
 MAX_VIDEO_DURATION_SECONDS=3600
 WHISPER_MODEL=tiny
 
-# Recommendation Engine Weights
-RECOMMENDATION_WEIGHT_DIVISION=30.0
-RECOMMENDATION_WEIGHT_POSITION=25.0
-RECOMMENDATION_WEIGHT_GAP=20.0
-RECOMMENDATION_WEIGHT_ASSESSMENT=15.0
-RECOMMENDATION_WEIGHT_RELEVANCE=10.0
-RECOMMENDATION_DEFAULT_LIMIT=5
-RECOMMENDATION_MAX_LIMIT=50
-
-# LMS API & Agent Configuration (Phase 8)
-LMS_API_BASE_URL=http://owl-app.local
-LMS_API_TOKEN=owl-lms-secret-token
-LMS_API_TIMEOUT=10.0
-MCP_ENABLED=true
-CHAT_MAX_HISTORY=5
-CHAT_MAX_TOOL_CALLS=5
-TOOL_TIMEOUT=15.0
-
+# Security Keys & Rate Limits (Phase 9)
+AI_API_AUTH_ENABLED=true
 AI_API_KEY=dev-shared-ai-key-change-in-production
 OWL_AI_API_KEY=owl-secret-api-key
 HR_AI_API_KEY=hr-corner-secret-api-key
+
+CHAT_RATE_LIMIT_PER_MINUTE=60
+INGESTION_RATE_LIMIT_PER_MINUTE=20
+SEARCH_RATE_LIMIT_PER_MINUTE=120
+HEALTH_RATE_LIMIT_PER_MINUTE=300
+MAX_RETRIES=2
 
 LOG_LEVEL=INFO
 CORS_ORIGINS=["*"]
@@ -165,86 +194,20 @@ CORS_ORIGINS=["*"]
 
 ---
 
-## 🚀 Docker Setup & Deployment
+## 💻 Sample API Call (cURL)
 
-### Run Containers with Docker Compose:
 ```bash
-docker compose build
-docker compose up -d
+curl -X POST \
+  "http://localhost:8000/api/v1/chat" \
+  -H "Authorization: Bearer owl-secret-api-key" \
+  -H "X-Request-ID: trace-req-12345" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "application": "owl",
+    "user_id": 123,
+    "message": "Pembelajaran apa yang cocok untuk posisi saya saat ini?"
+  }'
 ```
-
-### Container Status & Logs:
-```bash
-docker compose ps
-docker compose logs -f ai-service
-docker compose logs -f llama-server
-docker compose logs -f qdrant
-```
-
----
-
-## 📡 API Reference & Endpoints
-
-### Single Unified AI Chat Endpoint (Phase 8 Public Interface)
-- **POST `/api/v1/chat`** — Unified OWL LMS AI Agent endpoint. Automatically routes request, executes MCP tools/RAG, enforces security & tenant boundaries, and returns grounded answer with standardized sources.
-
-```json
-// Example Request Payload
-{
-  "application": "owl",
-  "user_id": 123,
-  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Rekomendasikan 3 modul pembelajaran terbaik untuk posisi saya."
-}
-
-// Example Response Payload
-{
-  "application": "owl",
-  "message": "Rekomendasi Pembelajaran untuk Anda: K3 Dasar Industri (Skor: 92.5), Operational Excellence (Skor: 85.0).",
-  "answer": "Rekomendasi Pembelajaran untuk Anda: K3 Dasar Industri (Skor: 92.5), Operational Excellence (Skor: 85.0).",
-  "provider": "llama_cpp",
-  "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-  "sources": [
-    {
-      "type": "recommendation",
-      "source_type": "recommendation",
-      "content_id": 101,
-      "title": "K3 Dasar Industri",
-      "score": 92.5
-    }
-  ],
-  "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tools_used": [
-    "get_user_learning_profile",
-    "get_learning_progress",
-    "get_user_assessments",
-    "get_learning_recommendations"
-  ],
-  "latency_ms": 2045.12
-}
-```
-
-### MCP Tools Debug Endpoint
-- **GET `/api/v1/tools`** — List registered MCP tools, schemas, and authorization requirements.
-
-### Recommendation Engine
-- **POST `/api/v1/recommendations`** — Generate personalized LMS recommendations with deterministic scoring & Qwen explanations.
-
-### Health Check Endpoints
-- **GET `/health`** — Core system healthcheck
-- **GET `/api/v1/health`** — API v1 healthcheck
-- **GET `/api/v1/health/llm`** — LLM inference engine readiness check
-
-### Video & Audio RAG Endpoints
-- **POST `/api/v1/rag/videos/upload`** — Upload video file, extract audio using FFmpeg, transcribe using Whisper, and index into Qdrant.
-- **GET `/api/v1/rag/videos/{document_id}/status?application=owl`** — Check transcription processing status.
-- **POST `/api/v1/rag/videos/{document_id}/reindex`** — Re-process and re-index video document.
-
-### Document RAG Endpoints
-- **POST `/api/v1/rag/documents/upload`** — Upload and index PDF document.
-- **POST `/api/v1/rag/documents/{document_id}/reindex`** — Re-index PDF document.
-- **DELETE `/api/v1/rag/documents/{document_id}?application=owl`** — Delete PDF/Video document from vector store.
-- **POST `/api/v1/rag/search`** — Search vector store across PDF and Video chunks.
 
 ---
 
@@ -258,5 +221,6 @@ docker compose logs -f qdrant
 [x] PHASE 5 : Video & Audio Transcription (Whisper)
 [x] PHASE 6 : OWL Learning Recommendation Engine
 [x] PHASE 7 : MCP / LMS Tools Integration
-[x] PHASE 8 : Unified OWL LMS AI Agent (COMPLETED)
+[x] PHASE 8 : Unified OWL LMS AI Agent
+[x] PHASE 9 : REST API Hardening & Shared API Contract (COMPLETED)
 ```

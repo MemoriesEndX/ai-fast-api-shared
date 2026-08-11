@@ -1,7 +1,10 @@
-from typing import Optional
+import logging
+from typing import Optional, Dict
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader
 from app.core.config import settings
+
+logger = logging.getLogger("ai_service.core.security")
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_security = HTTPBearer(auto_error=False)
@@ -11,33 +14,68 @@ async def verify_api_key(
     header_key: Optional[str] = Security(api_key_header),
     bearer: Optional[HTTPAuthorizationCredentials] = Security(bearer_security),
 ) -> str:
-    """Verify provided API key via X-API-Key header or Bearer Token.
-    Returns the identified application client identifier if valid.
     """
-    token = None
-    if header_key:
-        token = header_key
-    elif bearer:
-        token = bearer.credentials
+    Verify API Key / Bearer Token authentication.
+    Returns the identified application client identifier ('owl', 'hr-corner', or 'shared-ai').
+    """
+    if not settings.AI_API_AUTH_ENABLED:
+        return "shared-ai"
 
-    # If no key configured in settings (development mode without security enforced), allow request
-    valid_keys = {
+    token = None
+    if bearer and bearer.credentials:
+        token = bearer.credentials
+    elif header_key:
+        token = header_key
+
+    valid_keys: Dict[str, str] = {
         settings.AI_API_KEY: "shared-ai",
         settings.OWL_AI_API_KEY: "owl",
         settings.HR_AI_API_KEY: "hr-corner",
     }
     
-    # Remove empty keys from validation map
+    # Filter empty or unconfigured keys
     valid_keys = {k: v for k, v in valid_keys.items() if k}
 
     if not valid_keys:
         return "development"
 
     if not token or token not in valid_keys:
+        logger.warning(f"Unauthorized access attempt with token '{token[:8] if token else 'None'}...'.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API Key",
+            detail={
+                "code": "AUTHENTICATION_REQUIRED",
+                "message": "Invalid or missing API Bearer token."
+            },
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     return valid_keys[token]
+
+
+def validate_tenant_auth(client_app: str, requested_app: str) -> None:
+    """Enforce strict tenant authorization isolation based on API credentials."""
+    if not client_app or client_app in ["shared-ai", "development"]:
+        return
+
+    client_app_clean = client_app.strip().lower()
+    requested_app_clean = requested_app.strip().lower()
+
+    if client_app_clean == "owl" and requested_app_clean == "hr-corner":
+        logger.warning("Tenant isolation breach attempt: OWL credentials requested HR-Corner data.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "TENANT_ACCESS_DENIED",
+                "message": "Access denied. Application 'owl' credentials are not authorized to access 'hr-corner' tenant data."
+            }
+        )
+    elif client_app_clean == "hr-corner" and requested_app_clean == "owl":
+        logger.warning("Tenant isolation breach attempt: HR-Corner credentials requested OWL data.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "TENANT_ACCESS_DENIED",
+                "message": "Access denied. Application 'hr-corner' credentials are not authorized to access 'owl' tenant data."
+            }
+        )

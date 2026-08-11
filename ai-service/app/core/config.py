@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
 
     API_PREFIX: str = "/api/v1"
+    ENABLE_API_DOCS: bool = True
 
     OWL_BASE_URL: str = "http://owl-app.local"
     HR_CORNER_BASE_URL: str = "http://hr-corner-app.local"
@@ -35,11 +36,10 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 3
     RAG_SCORE_THRESHOLD: float = 0.4
 
-    # PDF Processing Limits
+    # File Upload & Security Size Limits
     MAX_PDF_SIZE_MB: int = 25
-
-    # Video & Audio Processing Limits
     MAX_VIDEO_SIZE_MB: int = 250
+    MAX_AUDIO_SIZE_MB: int = 50
     MAX_VIDEO_DURATION_SECONDS: int = 3600
     WHISPER_MODEL: str = "tiny"
 
@@ -77,10 +77,17 @@ class Settings(BaseSettings):
         "search_video_transcript",
     ]
 
-    # Security Keys
+    # Phase 9 REST API Hardening & Security Configuration
+    AI_API_AUTH_ENABLED: bool = True
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"
     HR_AI_API_KEY: str = "hr-corner-secret-api-key"
+
+    CHAT_RATE_LIMIT_PER_MINUTE: int = 60
+    INGESTION_RATE_LIMIT_PER_MINUTE: int = 20
+    SEARCH_RATE_LIMIT_PER_MINUTE: int = 120
+    HEALTH_RATE_LIMIT_PER_MINUTE: int = 300
+    MAX_RETRIES: int = 2
 
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: Union[List[str], str] = ["*"]

@@ -1,8 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, logger
-from app.schemas.common import RootResponse, HealthResponse
+from app.core.exceptions import (
+    http_exception_handler,
+    validation_exception_handler,
+    permission_exception_handler,
+    unhandled_exception_handler,
+)
+from app.schemas.common import RootResponse, HealthResponse, ReadinessResponse
+from app.api.v1.health import readiness_check
 from app.api.v1.router import api_v1_router
 import app.tools  # Register all MCP LMS and RAG tools
 
@@ -10,9 +18,15 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     debug=settings.APP_DEBUG,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
 )
+
+# Global Exception Handlers
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(PermissionError, permission_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # CORS Configuration
 origins = settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS]
@@ -25,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Custom Logging Middleware
+# Custom Logging Middleware (Request ID & Latency Tracing)
 app.add_middleware(LoggingMiddleware)
 
 # Include API v1 Router
@@ -44,12 +58,19 @@ async def root():
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health():
-    """System health check endpoint without authentication requirements."""
+    """Fast Liveness health check endpoint."""
     return HealthResponse(
         status="ok",
         service="ai-service",
         version=settings.APP_VERSION,
     )
+
+
+@app.get("/ready", response_model=ReadinessResponse, tags=["Health"])
+async def ready():
+    """Readiness probe checking dependency status."""
+    from app.services.llm_service import get_llm_service
+    return await readiness_check(llm_service=get_llm_service())
 
 
 if __name__ == "__main__":

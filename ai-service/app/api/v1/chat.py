@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import RAGService
+from app.core.security import verify_api_key, validate_tenant_auth
+from app.core.rate_limit import check_chat_rate_limit
 
 router = APIRouter(tags=["Chat API"])
 
@@ -12,7 +14,26 @@ def get_rag_service() -> RAGService:
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(
     request: ChatRequest,
+    client_app: str = Depends(verify_api_key),
+    _: None = Depends(check_chat_rate_limit),
     rag_service: RAGService = Depends(get_rag_service),
 ):
-    """Multi-tenant RAG-augmented AI Chat completion endpoint."""
+    """Multi-tenant Unified AI Agent Chat completion endpoint."""
+    app_str = str(request.application.value if hasattr(request.application, 'value') else request.application)
+    
+    # 1. Tenant Authorization Check
+    validate_tenant_auth(client_app, app_str)
+
+    # 2. Input Validation Bounds
+    if len(request.message.strip()) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_REQUEST", "message": "Message content cannot be empty."}
+        )
+    if len(request.message) > 4000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_REQUEST", "message": "Message payload exceeds maximum limit of 4000 characters."}
+        )
+
     return await rag_service.chat_completion(request)

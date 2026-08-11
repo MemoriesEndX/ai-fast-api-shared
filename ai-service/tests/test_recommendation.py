@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 
 
 @pytest.fixture
@@ -85,7 +86,7 @@ def test_recommendation_user_no_history(base_user, sample_candidates):
         "candidates": sample_candidates,
         "limit": 5,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["application"] == "owl"
@@ -108,7 +109,7 @@ def test_recommendation_completed_content_exclusion(base_user, sample_candidates
         "completed_content": [102],  # User already completed ID 102
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     rec_ids = [r["id"] for r in data["recommendations"]]
@@ -122,7 +123,7 @@ def test_recommendation_inactive_content_exclusion(base_user, sample_candidates)
         "user": base_user,
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     rec_ids = [r["id"] for r in data["recommendations"]]
@@ -137,7 +138,7 @@ def test_recommendation_in_progress_content(base_user, sample_candidates):
         "in_progress_content": [{"id": 101, "progress": 40, "finish": 0}],
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     # 101 should still be included since finish=0 and progress<100
@@ -155,7 +156,7 @@ def test_recommendation_low_assessment_score_signal(base_user, sample_candidates
         ],
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     rec_102 = next(r for r in data["recommendations"] if r["id"] == 102)
@@ -174,7 +175,7 @@ def test_recommendation_division_and_position_relevance(base_user, sample_candid
         },
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     top = data["recommendations"][0]
@@ -191,7 +192,7 @@ def test_recommendation_playlist_candidate(base_user, sample_candidates):
         "type_filter": "playlist",
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert all(r["type"] == "playlist" for r in data["recommendations"])
@@ -205,10 +206,10 @@ def test_recommendation_tenant_isolation(base_user, sample_candidates):
         "user": base_user,
         "candidates": sample_candidates,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
-    assert response.status_code == 400
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
+    assert response.status_code in (400, 403)
     data = response.json()
-    assert "UNSUPPORTED_APPLICATION" in str(data)
+    assert "TENANT_ACCESS_DENIED" in str(data)
 
 
 def test_recommendation_limit_parameter(base_user, sample_candidates):
@@ -219,7 +220,7 @@ def test_recommendation_limit_parameter(base_user, sample_candidates):
         "candidates": sample_candidates,
         "limit": 2,
     }
-    response = client.post("/api/v1/recommendations", json=payload)
+    response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert len(data["recommendations"]) <= 2
@@ -238,7 +239,7 @@ async def test_recommendation_qwen_failure_resilience(base_user, sample_candidat
         "app.services.llm_service.LlamaCppLLMService.generate_explanation",
         new=AsyncMock(side_effect=Exception("llama-server connection timeout")),
     ):
-        response = client.post("/api/v1/recommendations", json=payload)
+        response = client.post("/api/v1/recommendations", json=payload, headers=HEADERS)
         assert response.status_code == 200
         data = response.json()
         assert len(data["recommendations"]) > 0
