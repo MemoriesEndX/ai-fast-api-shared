@@ -1,0 +1,47 @@
+<article class="docs-article">
+  <h1>Quick Start Guide</h1>
+  <p class="lead" style="font-size: 1.15rem; color: var(--text-secondary); margin-bottom: 2rem;">
+    Get up and running with the Shared AI Service in 3 simple steps.
+  </p>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Step 1: Obtain Authorization API Key</h2>
+    <p>All client applications interacting with the service must supply an API key in the <code>X-API-Key</code> request header.</p>
+    <ul>
+      <li>OWL LMS API Key: <code>owl-secret-api-key</code></li>
+      <li>HR Corner API Key: <code>hr-corner-secret-api-key</code></li>
+      <li>Master Shared AI Key: <code>dev-shared-ai-key-change-in-production</code></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Step 2: Check Service Health</h2>
+    <p>Verify that the service is running and dependencies (Qdrant & LLM backend) are healthy:</p>
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>cURL</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>curl -X GET "http://localhost:8000/api/v1/health"</code></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Step 3: Send Your First Chat Request</h2>
+    <p>Send a message to the Unified AI Chat endpoint for OWL LMS:</p>
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>cURL</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>curl -X POST "http://localhost:8000/api/v1/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: owl-secret-api-key" \
+  -d '{
+    "application": "owl",
+    "user_id": 1,
+    "message": "Rekomendasikan kursus Python untuk pemula."
+  }'</code></pre>
+    </div>
+  </div>
+</article>

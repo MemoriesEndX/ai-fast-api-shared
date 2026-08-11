@@ -1,0 +1,38 @@
+<div class="playground-panel">
+  <form class="playground-form" onsubmit="event.preventDefault(); window.DocPlayground.sendRequest(this);">
+    <div class="form-group">
+      <label class="form-label">Authorization Header</label>
+      <input type="password" class="form-input pg-auth-token" placeholder="Enter API Key (e.g. dev-shared-ai-key-change-in-production)" autocomplete="off" />
+      <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; display: block;">Token stored in-memory during session. Never persisted.</span>
+    </div>
+
+    <div class="pg-params-inputs"></div>
+
+    <div class="form-group pg-body-group">
+      <label class="form-label">Request Body (JSON)</label>
+      <textarea class="form-textarea pg-json-body" rows="8"></textarea>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem;">
+      <button type="submit" class="btn-primary pg-send-btn">
+        <span>Send Request</span>
+      </button>
+      <button type="button" class="btn-secondary" onclick="window.DocPlayground.resetForm(this)">
+        <span>Reset</span>
+      </button>
+    </div>
+  </form>
+
+  <div class="pg-response-wrapper" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="pg-status-badge" style="font-family: var(--font-mono); font-size: 0.8rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;"></span>
+        <span class="pg-latency-badge" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+      </div>
+      <button class="copy-btn" onclick="window.DocPlayground.copyResponse(this)">Copy Response</button>
+    </div>
+    <div class="code-block-container">
+      <pre><code class="pg-response-json"></code></pre>
+    </div>
+  </div>
+</div>

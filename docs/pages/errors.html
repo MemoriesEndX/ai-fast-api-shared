@@ -1,0 +1,67 @@
+<article class="docs-article">
+  <h1>Standard Error Code Catalog</h1>
+  <p class="lead" style="font-size: 1.15rem; color: var(--text-secondary); margin-bottom: 2rem;">
+    The Shared AI Service returns structured JSON error responses with consistent HTTP status codes and machine-readable error codes.
+  </p>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Error Response Format</h2>
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>Standard Error Payload</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>{
+  "error": {
+    "code": "ERROR_CODE_STRING",
+    "message": "Human readable description of the error.",
+    "status": 400
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <h2>Error Code Dictionary</h2>
+  <table class="docs-table">
+    <thead>
+      <tr><th>HTTP Status</th><th>Error Code</th><th>Cause / Solution</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>400</code></td>
+        <td><code>INVALID_REQUEST</code></td>
+        <td>Payload validation failed, missing required fields, or payload size exceeds maximum limit.</td>
+      </tr>
+      <tr>
+        <td><code>401</code></td>
+        <td><code>UNAUTHORIZED</code></td>
+        <td>Missing or invalid <code>X-API-Key</code> header. Ensure proper API key is provided.</td>
+      </tr>
+      <tr>
+        <td><code>403</code></td>
+        <td><code>TENANT_ACCESS_DENIED</code></td>
+        <td>Client application key mismatch with request application field (e.g. OWL key requesting HR Corner data).</td>
+      </tr>
+      <tr>
+        <td><code>404</code></td>
+        <td><code>RESOURCE_NOT_FOUND</code></td>
+        <td>Requested document, article, or endpoint does not exist.</td>
+      </tr>
+      <tr>
+        <td><code>413</code></td>
+        <td><code>PAYLOAD_TOO_LARGE</code></td>
+        <td>Uploaded file exceeds maximum size limits (PDF > 25MB, Audio > 50MB, Video > 250MB).</td>
+      </tr>
+      <tr>
+        <td><code>429</code></td>
+        <td><code>RATE_LIMIT_EXCEEDED</code></td>
+        <td>Client application has exceeded the maximum request rate per minute limit.</td>
+      </tr>
+      <tr>
+        <td><code>503</code></td>
+        <td><code>AI_SERVICE_UNAVAILABLE</code></td>
+        <td>Upstream LLM backend (llama-server) or Qdrant vector database is offline or not ready.</td>
+      </tr>
+    </tbody>
+  </table>
+</article>

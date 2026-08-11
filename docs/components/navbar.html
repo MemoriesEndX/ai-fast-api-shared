@@ -1,0 +1,58 @@
+<header class="docs-header">
+  <div style="display: flex; align-items: center; gap: 1rem;">
+    <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="Toggle Navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    <a href="#introduction" class="brand-container">
+      <div class="brand-logo">AI</div>
+      <span>SHARED AI SERVICE</span>
+      <span class="brand-version" id="nav-app-version">v1.0.0</span>
+    </a>
+  </div>
+
+  <div class="nav-actions">
+    <button class="search-btn" id="nav-search-trigger">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <span>Search docs...</span>
+      <span class="kbd-shortcut">Ctrl K</span>
+    </button>
+
+    <div class="header-links">
+      <a href="/openapi.json" target="_blank" class="header-link" title="Raw OpenAPI Specification">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        <span>OpenAPI JSON</span>
+      </a>
+      <a href="/docs" target="_blank" class="header-link" title="Swagger UI">
+        <span>Swagger UI</span>
+      </a>
+      <a href="/redoc" target="_blank" class="header-link" title="ReDoc Documentation">
+        <span>ReDoc</span>
+      </a>
+      <a href="/openapi.json" download="openapi.json" class="header-link" title="Download OpenAPI JSON Specification">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Download</span>
+      </a>
+    </div>
+
+    <button class="theme-toggle-btn" id="theme-toggle" title="Toggle Light/Dark Theme">
+      <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </div>
+</header>

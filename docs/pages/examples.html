@@ -1,0 +1,74 @@
+<article class="docs-article">
+  <h1>Code Examples & SDK Guides</h1>
+  <p class="lead" style="font-size: 1.15rem; color: var(--text-secondary); margin-bottom: 2rem;">
+    Integration snippets for Python, JavaScript / TypeScript, and cURL across common workflow scenarios.
+  </p>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">1. Python (requests & httpx)</h2>
+    <p>Integration using Python's <code>requests</code> library for multi-tenant chat:</p>
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>Python</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>import requests
+
+BASE_URL = "http://localhost:8000/api/v1"
+HEADERS = {
+    "Content-Type": "application/json",
+    "X-API-Key": "owl-secret-api-key"
+}
+
+def ask_ai_agent(user_id: int, message: str):
+    url = f"{BASE_URL}/chat"
+    payload = {
+        "application": "owl",
+        "user_id": user_id,
+        "message": message
+    }
+    response = requests.post(url, headers=HEADERS, json=payload)
+    response.raise_for_status()
+    return response.json()
+
+if __name__ == "__main__":
+    res = ask_ai_agent(user_id=42, message="Apa saja rekomendasi modul pembelajaran minggu ini?")
+    print("AI Answer:", res.get("answer"))</code></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">2. JavaScript (Fetch API / Node.js)</h2>
+    <p>Integration using modern JavaScript <code>async/await</code> for PDF RAG ingestion:</p>
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>JavaScript</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>async function uploadPdfDocument(fileInput, documentId, title) {
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("application", "owl");
+  formData.append("document_id", documentId);
+  formData.append("title", title);
+
+  const response = await fetch("http://localhost:8000/api/v1/rag/documents/upload", {
+    method: "POST",
+    headers: {
+      "X-API-Key": "owl-secret-api-key"
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Upload failed: ${errorData.error?.message || response.statusText}`);
+  }
+
+  const result = await response.json();
+  console.log("PDF Upload Success:", result);
+  return result;
+}</code></pre>
+    </div>
+  </div>
+</article>

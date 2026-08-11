@@ -45,6 +45,14 @@ app.add_middleware(LoggingMiddleware)
 # Include API v1 Router
 app.include_router(api_v1_router, prefix=settings.API_PREFIX)
 
+# Mount Static Custom Documentation Frontend
+import os
+from fastapi.staticfiles import StaticFiles
+docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
+if os.path.exists(docs_dir):
+    app.mount("/documentation", StaticFiles(directory=docs_dir, html=True), name="documentation")
+
+
 
 @app.get("/", response_model=RootResponse, tags=["Root"])
 async def root():

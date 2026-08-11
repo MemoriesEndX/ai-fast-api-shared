@@ -1,0 +1,73 @@
+<article class="docs-article">
+  <h1>Introduction & Architecture</h1>
+  <p class="lead" style="font-size: 1.15rem; color: var(--text-secondary); margin-bottom: 2rem;">
+    Welcome to the <strong>SHARED AI SERVICE</strong> API Documentation. This unified multi-tenant AI service powers intelligent capabilities across OWL LMS, HR Corner, and enterprise applications.
+  </p>
+
+  <div class="card">
+    <h2>System Architecture</h2>
+    <p>The Shared AI Service is built on FastAPI, lightweight LLM inference (llama-server / Qwen2.5), Qdrant vector database, and faster-whisper transcription engine.</p>
+    
+    <div style="background: var(--bg-tertiary); padding: 1.25rem; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 1rem;">
+<pre style="margin: 0; padding: 0; background: transparent; color: var(--text-primary);">
+Client Applications (OWL / HR Corner)
+               │
+               ▼  [X-API-Key / Tenant Authorization]
+        FastAPI Service (app.main)
+               │
+     ┌─────────┼─────────┬──────────────┐
+     ▼         ▼         ▼              ▼
+  Unified   Knowledge  RAG Engine   Recommendation
+   Chat     Management (PDF/Video)     Engine
+     │         │         │              │
+     └─────────┴─────────┼──────────────┘
+                         ▼
+        ┌────────────────┴────────────────┐
+        ▼                                 ▼
+llama-server (Qwen2.5)          Qdrant Vector DB
+</pre>
+    </div>
+  </div>
+
+  <h2>Core Capabilities</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="card" style="margin-bottom: 0;">
+      <h3 style="margin-top: 0;">Unified Chat & MCP Tools</h3>
+      <p style="font-size: 0.9rem;">Multi-tenant conversational agent with access to 10+ LMS & RAG tools for personalized assistance.</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+      <h3 style="margin-top: 0;">Knowledge Management</h3>
+      <p style="font-size: 0.9rem;">Categorized document ingestion, fast vector retrieval, summary generation, and management.</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+      <h3 style="margin-top: 0;">PDF & Video RAG</h3>
+      <p style="font-size: 0.9rem;">Automated PDF parsing and local Whisper audio/video transcription with hybrid semantic search.</p>
+    </div>
+    <div class="card" style="margin-bottom: 0;">
+      <h3 style="margin-top: 0;">Personalized Recommendations</h3>
+      <p style="font-size: 0.9rem;">6-factor weighted recommendation engine for courses, content, and learning playlists.</p>
+    </div>
+  </div>
+
+  <h2>Base URLs & API Access</h2>
+  <table class="docs-table">
+    <thead>
+      <tr><th>Environment</th><th>Base URL</th><th>Prefix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Development / Local</td>
+        <td><code>http://localhost:8000</code></td>
+        <td><code>/api/v1</code></td>
+      </tr>
+      <tr>
+        <td>Docker Compose</td>
+        <td><code>http://ai-service:8000</code></td>
+        <td><code>/api/v1</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Health Check Endpoints</h2>
+  <div id="intro-health-endpoints" data-openapi-tag="Health"></div>
+</article>

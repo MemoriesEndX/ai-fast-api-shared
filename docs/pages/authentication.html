@@ -1,0 +1,58 @@
+<article class="docs-article">
+  <h1>Authentication & Security</h1>
+  <p class="lead" style="font-size: 1.15rem; color: var(--text-secondary); margin-bottom: 2rem;">
+    The Shared AI Service utilizes API Key Authentication and Strict Multi-Tenant Access Validation.
+  </p>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Authentication Headers</h2>
+    <p>Every non-health API endpoint requires the <code>X-API-Key</code> request header (or <code>Authorization: Bearer &lt;key&gt;</code>).</p>
+
+    <table class="docs-table">
+      <thead>
+        <tr><th>Header Name</th><th>Format</th><th>Example Value</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>X-API-Key</code></td>
+          <td>String</td>
+          <td><code>owl-secret-api-key</code></td>
+        </tr>
+        <tr>
+          <td><code>Authorization</code></td>
+          <td>Bearer Token</td>
+          <td><code>Bearer owl-secret-api-key</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Multi-Tenant Isolation</h2>
+    <p>The system validates that the client application identity matches the request payload <code>application</code> parameter:</p>
+    <ul>
+      <li>If <code>X-API-Key: owl-secret-api-key</code> is used, the request payload <code>application</code> MUST be <code>"owl"</code>.</li>
+      <li>If <code>X-API-Key: hr-corner-secret-api-key</code> is used, the request payload <code>application</code> MUST be <code>"hr-corner"</code>.</li>
+      <li>Mismatched requests will be rejected immediately with <code>403 TENANT_ACCESS_DENIED</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top: 0;">Authentication Error Responses</h2>
+    <p>Unauthenticated or mismatched tenant requests return standardized JSON error objects:</p>
+
+    <div class="code-block-container">
+      <div class="code-header">
+        <span>401 Unauthorized Response</span>
+        <button class="copy-btn" onclick="window.DocApp.copyCodeBlock(this)">Copy</button>
+      </div>
+      <pre><code>{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or missing API key.",
+    "status": 401
+  }
+}</code></pre>
+    </div>
+  </div>
+</article>
