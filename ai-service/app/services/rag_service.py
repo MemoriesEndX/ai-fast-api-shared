@@ -64,92 +64,97 @@ class RAGService:
         }
 
         # 1. Extract audio & fingerprint hash via VideoService & FFmpeg
-        audio_path, doc_hash, duration_sec = self.video_service.extract_audio_from_video(filename, file_bytes)
+        audio_path, doc_hash, duration_sec, temp_dir = self.video_service.extract_audio_from_video(filename, file_bytes)
 
-        # 2. Check for existing document hash idempotency
-        existing = await self.qdrant_service.get_document_by_hash(application, doc_hash)
-        if existing and existing.get("document_id") == str(document_id):
-            logger.info(f"Video {filename} with hash {doc_hash[:8]} already indexed. Skipping duplicate.")
+        try:
+            # 2. Check for existing document hash idempotency
+            existing = await self.qdrant_service.get_document_by_hash(application, doc_hash)
+            if existing and existing.get("document_id") == str(document_id):
+                logger.info(f"Video {filename} with hash {doc_hash[:8]} already indexed. Skipping duplicate.")
+                self._processing_status_store[status_key] = {
+                    "document_id": document_id,
+                    "application": application,
+                    "status": "completed",
+                    "progress": 100,
+                }
+                return {
+                    "status": "already_indexed",
+                    "application": application,
+                    "document_id": document_id,
+                    "filename": filename,
+                    "document_hash": doc_hash,
+                    "duration_seconds": duration_sec,
+                    "segments": 0,
+                    "chunks": 0,
+                }
+
+            # 3. Transcribe audio to timestamped segments via TranscriptionService (faster-whisper)
+            self._processing_status_store[status_key]["progress"] = 50
+            segments = self.transcription_service.transcribe_audio_file(audio_path, language=language)
+
+            # 4. Timestamp-aware chunking
+            self._processing_status_store[status_key]["progress"] = 75
+            chunks = self.chunking_service.chunk_transcript_segments(segments)
+
+            if not chunks:
+                self._processing_status_store[status_key]["status"] = "failed"
+                return {
+                    "status": "failed",
+                    "application": application,
+                    "document_id": document_id,
+                    "chunks": 0,
+                    "message": "No text chunks generated from video transcript."
+                }
+
+            # 5. Generate vector embeddings
+            texts = [c["text"] for c in chunks]
+            embeddings = self.embedding_service.embed_batch(texts)
+
+            # 6. Assemble chunk payloads with timestamp metadata
+            chunks_data = []
+            for c, emb in zip(chunks, embeddings):
+                chunks_data.append({
+                    "application": application,
+                    "document_id": str(document_id),
+                    "content_id": str(content_id) if content_id else None,
+                    "source_type": "video",
+                    "title": title,
+                    "filename": filename,
+                    "document_hash": doc_hash,
+                    "version": version,
+                    "chunk_index": c["chunk_index"],
+                    "start_seconds": c.get("start_seconds"),
+                    "end_seconds": c.get("end_seconds"),
+                    "start_time": c.get("start_time"),
+                    "end_time": c.get("end_time"),
+                    "text": c["text"],
+                    "vector": emb,
+                })
+
+            # 7. Upsert to Qdrant Vector DB
+            success = await self.qdrant_service.upsert_chunks(chunks_data)
+
             self._processing_status_store[status_key] = {
                 "document_id": document_id,
                 "application": application,
-                "status": "completed",
-                "progress": 100,
+                "status": "completed" if success else "failed",
+                "progress": 100 if success else 0,
             }
+
             return {
-                "status": "already_indexed",
+                "status": "indexed" if success else "failed",
                 "application": application,
                 "document_id": document_id,
                 "filename": filename,
                 "document_hash": doc_hash,
                 "duration_seconds": duration_sec,
-                "segments": 0,
-                "chunks": 0,
+                "segments": len(segments),
+                "chunks": len(chunks),
             }
-
-        # 3. Transcribe audio to timestamped segments via TranscriptionService (faster-whisper)
-        self._processing_status_store[status_key]["progress"] = 50
-        segments = self.transcription_service.transcribe_audio_file(audio_path, language=language)
-
-        # 4. Timestamp-aware chunking
-        self._processing_status_store[status_key]["progress"] = 75
-        chunks = self.chunking_service.chunk_transcript_segments(segments)
-
-        if not chunks:
-            self._processing_status_store[status_key]["status"] = "failed"
-            return {
-                "status": "failed",
-                "application": application,
-                "document_id": document_id,
-                "chunks": 0,
-                "message": "No text chunks generated from video transcript."
-            }
-
-        # 5. Generate vector embeddings
-        texts = [c["text"] for c in chunks]
-        embeddings = self.embedding_service.embed_batch(texts)
-
-        # 6. Assemble chunk payloads with timestamp metadata
-        chunks_data = []
-        for c, emb in zip(chunks, embeddings):
-            chunks_data.append({
-                "application": application,
-                "document_id": str(document_id),
-                "content_id": str(content_id) if content_id else None,
-                "source_type": "video",
-                "title": title,
-                "filename": filename,
-                "document_hash": doc_hash,
-                "version": version,
-                "chunk_index": c["chunk_index"],
-                "start_seconds": c.get("start_seconds"),
-                "end_seconds": c.get("end_seconds"),
-                "start_time": c.get("start_time"),
-                "end_time": c.get("end_time"),
-                "text": c["text"],
-                "vector": emb,
-            })
-
-        # 7. Upsert to Qdrant Vector DB
-        success = await self.qdrant_service.upsert_chunks(chunks_data)
-
-        self._processing_status_store[status_key] = {
-            "document_id": document_id,
-            "application": application,
-            "status": "completed" if success else "failed",
-            "progress": 100 if success else 0,
-        }
-
-        return {
-            "status": "indexed" if success else "failed",
-            "application": application,
-            "document_id": document_id,
-            "filename": filename,
-            "document_hash": doc_hash,
-            "duration_seconds": duration_sec,
-            "segments": len(segments),
-            "chunks": len(chunks),
-        }
+        finally:
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     async def get_video_processing_status(self, application: str, document_id: str) -> Dict[str, Any]:
         """Get processing status of video transcription job."""

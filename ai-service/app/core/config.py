@@ -110,5 +110,10 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def is_production(self) -> bool:
+        """Check if running in production environment."""
+        return self.APP_ENV.lower() in ("production", "prod")
+
 
 settings = Settings()
+

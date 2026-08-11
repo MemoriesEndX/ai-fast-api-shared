@@ -16,20 +16,35 @@ services:
     container_name: shared-ai-service
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     networks:
       - ai-network
     depends_on:
-      - llama-server
-      - qdrant
+      llama-server:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1536M
+        reservations:
+          cpus: '0.50'
+          memory: 512M
 
   llama-server:
     image: ghcr.io/ggerganov/llama.cpp:server
@@ -52,6 +67,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 2048M
+        reservations:
+          cpus: '1.00'
+          memory: 512M
 
   qdrant:
     image: qdrant/qdrant:v1.12.1
@@ -67,3 +95,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

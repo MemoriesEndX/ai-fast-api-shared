@@ -52,8 +52,11 @@ class VideoService:
                 }
             )
 
-    def extract_audio_from_video(self, filename: str, file_bytes: bytes) -> Tuple[str, str, float]:
-        """Extract 16kHz mono WAV audio stream from video using FFmpeg. Returns (audio_wav_path, document_hash, duration_seconds)."""
+    def extract_audio_from_video(self, filename: str, file_bytes: bytes) -> Tuple[str, str, float, str]:
+        """
+        Extract 16kHz mono WAV audio stream from video using FFmpeg.
+        Returns (audio_wav_path, document_hash, duration_seconds, temp_dir_path).
+        """
         self.validate_video_file(filename, file_bytes)
         doc_hash = self.calculate_document_hash(file_bytes)
 
@@ -69,7 +72,7 @@ class VideoService:
         ffmpeg_bin = shutil.which("ffmpeg")
         if not ffmpeg_bin:
             logger.warning("FFmpeg binary not found on host. Operating in fallback mock mode.")
-            return video_path, doc_hash, 10.0
+            return video_path, doc_hash, 10.0, temp_dir
 
         try:
             # Extract 16kHz mono PCM WAV audio stream using FFmpeg
@@ -87,14 +90,14 @@ class VideoService:
 
             # Probe audio duration using ffprobe if available
             duration_sec = self._probe_duration(video_path)
-            return audio_path, doc_hash, duration_sec
+            return audio_path, doc_hash, duration_sec, temp_dir
 
         except subprocess.CalledProcessError as e:
             logger.error(f"FFmpeg audio extraction failed: {e.stderr.decode('utf-8', errors='ignore')}")
             # Fallback for dev / test mode if dummy video bytes are passed
             if settings.APP_ENV in ("development", "test"):
                 logger.warning("Operating in fallback mock audio mode for dev/test environment.")
-                return video_path, doc_hash, 10.0
+                return video_path, doc_hash, 10.0, temp_dir
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={
