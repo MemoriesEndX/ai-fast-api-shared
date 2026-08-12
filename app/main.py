@@ -16,11 +16,17 @@ from app.api.v1.router import api_v1_router
 import app.tools  # Register all MCP LMS and RAG tools
 
 app = FastAPI(
-    title=settings.APP_NAME,
+    title=f"{settings.APP_NAME} API Gateway",
+    description=(
+        "Multi-tenant Shared AI Service API Gateway serving OWL LMS, HR Corner, Cineku, "
+        "and future enterprise applications. Provides unified agent chat completion, "
+        "multimodal RAG engine, knowledge management, and personalized recommendations."
+    ),
     version=settings.APP_VERSION,
     debug=settings.APP_DEBUG,
     docs_url="/docs" if settings.ENABLE_API_DOCS else None,
     redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json",
 )
 
 # Global Exception Handlers

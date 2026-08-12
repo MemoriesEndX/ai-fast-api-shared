@@ -16,6 +16,7 @@ class ErrorCode:
     INVALID_REQUEST = "INVALID_REQUEST"
     RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
     RATE_LIMITED = "RATE_LIMITED"
+    RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
     UNSUPPORTED_APPLICATION = "UNSUPPORTED_APPLICATION"
@@ -55,7 +56,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     elif exc.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE:
         error_code = ErrorCode.PAYLOAD_TOO_LARGE
     elif exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
-        error_code = ErrorCode.RATE_LIMITED
+        error_code = ErrorCode.RATE_LIMIT_EXCEEDED
     elif exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
         error_code = ErrorCode.AI_SERVICE_UNAVAILABLE
     elif exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:

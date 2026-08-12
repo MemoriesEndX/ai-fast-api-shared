@@ -23,7 +23,10 @@ class RateLimiter:
         auth_header = request.headers.get("authorization", "") or request.headers.get("x-api-key", "")
         token_id = auth_header[-8:] if auth_header else client_host
 
-        key = f"{bucket_name}:{token_id}"
+        from app.core.logging import resolve_tenant_from_request
+        app_name = resolve_tenant_from_request(request)
+
+        key = f"{app_name}:{bucket_name}:{token_id}"
 
         # Clean old timestamps outside 60-second window
         window_start = now - 60.0
@@ -34,8 +37,8 @@ class RateLimiter:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
-                    "code": "RATE_LIMITED",
-                    "message": f"Rate limit exceeded for endpoint '{bucket_name}'. Maximum allowed is {max_requests_per_minute} requests per minute."
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": f"Rate limit exceeded for application '{app_name}' on endpoint '{bucket_name}'. Maximum allowed is {max_requests_per_minute} requests per minute."
                 },
                 headers={"Retry-After": "60"}
             )
