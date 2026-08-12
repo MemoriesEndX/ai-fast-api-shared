@@ -505,6 +505,68 @@ class QdrantService:
 
         return {"success": True, "deleted_chunks": deleted_count}
 
+    _snapshot_store: Dict[str, Dict[str, Any]] = {}
+
+    async def create_snapshot(self) -> Dict[str, Any]:
+        """Create native Qdrant collection snapshot or fallback snapshot backup."""
+        import time
+        self._get_client()
+        snapshot_id = f"{self.collection_name}_snap_{int(time.time())}"
+
+        if self.client and self.client != "in_memory":
+            try:
+                snap_info = self.client.create_snapshot(collection_name=self.collection_name)
+                snap_name = getattr(snap_info, "name", snapshot_id)
+                logger.info(f"Created Qdrant snapshot: {snap_name}")
+                return {"success": True, "snapshot_name": snap_name, "collection": self.collection_name}
+            except Exception as e:
+                logger.error(f"Error creating Qdrant snapshot: {e}")
+
+        # In-memory snapshot copy
+        current_data = [dict(item) for item in self._memory_store.get(self.collection_name, [])]
+        self._snapshot_store[snapshot_id] = {
+            "collection": self.collection_name,
+            "data": current_data,
+            "timestamp": time.time(),
+        }
+        logger.info(f"Created in-memory Qdrant snapshot backup: {snapshot_id}")
+        return {"success": True, "snapshot_name": snapshot_id, "collection": self.collection_name}
+
+    async def list_snapshots(self) -> List[Dict[str, Any]]:
+        """List available snapshots for the collection."""
+        self._get_client()
+        if self.client and self.client != "in_memory":
+            try:
+                snaps = self.client.list_snapshots(collection_name=self.collection_name)
+                return [{"name": getattr(s, "name", str(s)), "size": getattr(s, "size", 0)} for s in snaps]
+            except Exception as e:
+                logger.error(f"Error listing Qdrant snapshots: {e}")
+
+        return [
+            {"name": name, "timestamp": meta["timestamp"], "count": len(meta["data"])}
+            for name, meta in self._snapshot_store.items()
+            if meta["collection"] == self.collection_name
+        ]
+
+    async def restore_snapshot(self, snapshot_name: str) -> bool:
+        """Restore collection state from snapshot."""
+        self._get_client()
+        if self.client and self.client != "in_memory":
+            try:
+                location = f"{self.url}/collections/{self.collection_name}/snapshots/{snapshot_name}"
+                self.client.recover_snapshot(collection_name=self.collection_name, location=location)
+                logger.info(f"Restored Qdrant collection {self.collection_name} from snapshot {snapshot_name}")
+                return True
+            except Exception as e:
+                logger.error(f"Error restoring Qdrant snapshot: {e}")
+
+        if snapshot_name in self._snapshot_store:
+            snap_data = self._snapshot_store[snapshot_name]["data"]
+            self._memory_store[self.collection_name] = [dict(item) for item in snap_data]
+            logger.info(f"Restored in-memory Qdrant collection from snapshot {snapshot_name}")
+            return True
+        return False
+
     async def check_health(self) -> Dict[str, Any]:
         """Check Qdrant server connection health status."""
         self._get_client()
@@ -516,7 +578,14 @@ class QdrantService:
                 pass
         return {"status": "degraded", "service": "qdrant", "url": self.url}
 
+    async def health_check(self) -> bool:
+        """Boolean status check for readiness probe."""
+        res = await self.check_health()
+        return res.get("status") == "ok"
+
+
 
 # Singleton instance
 qdrant_service = QdrantService()
+
 
