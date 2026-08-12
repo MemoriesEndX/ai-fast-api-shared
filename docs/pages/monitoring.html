@@ -1,0 +1,84 @@
+<div class="page-header">
+  <div class="page-badge">Phase 17 Production</div>
+  <h1 class="page-title">Production Observability & Monitoring</h1>
+  <p class="page-description">
+    Structured logging, distributed request ID tracing, health and readiness probes, and real-time operational metrics for OWL, HR Corner, and Cineku.
+  </p>
+</div>
+
+<section class="doc-section">
+  <h2 class="section-title">1. Request ID Tracing</h2>
+  <p>Every incoming HTTP request is assigned or traced with a unique <code>X-Request-ID</code> identifier.</p>
+  <ul>
+    <li><strong>Client Propagation:</strong> If a client includes <code>X-Request-ID</code> in request headers, the system validates and propagates it throughout the request lifecycle.</li>
+    <li><strong>Auto-Generation:</strong> If omitted, a UUIDv4 string is automatically generated.</li>
+    <li><strong>Response Header:</strong> The service attaches <code>X-Request-ID</code> and <code>X-Process-Time</code> to every response.</li>
+  </ul>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">HTTP Response Headers</span>
+    </div>
+    <pre><code>HTTP/1.1 200 OK
+Content-Type: application/json
+X-Request-ID: e89a42f1-678b-4c22-b91a-821213f569a1
+X-Process-Time: 4612.45ms</code></pre>
+  </div>
+</section>
+
+<section class="doc-section">
+  <h2 class="section-title">2. Operational Health & Readiness Probes</h2>
+  <p>The service provides dedicated health probes for container orchestrators (Kubernetes / Docker Swarm / Compose):</p>
+
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method-tag method-get">GET</span>
+      <span class="endpoint-path">/health</span>
+      <span class="endpoint-desc">Liveness Probe</span>
+    </div>
+    <p>Fast process liveness check confirming service container is running.</p>
+  </div>
+
+  <div class="endpoint-card">
+    <div class="endpoint-header">
+      <span class="method-tag method-get">GET</span>
+      <span class="endpoint-path">/ready</span>
+      <span class="endpoint-desc">Readiness Probe</span>
+    </div>
+    <p>Dependency readiness check evaluating Qwen 2.5 LLM backend and Qdrant Vector Engine availability.</p>
+  </div>
+</section>
+
+<section class="doc-section">
+  <h2 class="section-title">3. Operational Metrics Endpoints</h2>
+  <p>Real-time Prometheus exposition and JSON snapshot metrics:</p>
+  <ul>
+    <li><code>GET /metrics</code> — Prometheus text exposition format (Content-Type: <code>text/plain; version=0.0.4</code>)</li>
+    <li><code>GET /metrics/json</code> — JSON metrics snapshot</li>
+  </ul>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">Prometheus Exposition Sample</span>
+    </div>
+    <pre><code># HELP ai_requests_total Total count of AI chat requests processed
+# TYPE ai_requests_total counter
+ai_requests_total{application="owl",endpoint="/api/v1/owl/chat",status_code="200"} 42
+ai_requests_total{application="cineku",endpoint="/api/v1/cineku/chat",status_code="200"} 19
+
+# HELP llm_latency_seconds LLM inference execution latency in seconds
+# TYPE llm_latency_seconds gauge
+llm_latency_seconds{model="qwen2.5-0.5b"} 4.5210
+
+# HELP qdrant_requests_total Total count of Qdrant vector operations
+# TYPE qdrant_requests_total counter
+qdrant_requests_total{operation="search"} 88</code></pre>
+  </div>
+</section>
+
+<section class="doc-section">
+  <h2 class="section-title">4. Secret & Privacy Protection Audit</h2>
+  <div class="info-alert info-success">
+    <strong>Zero Data Leakage Policy:</strong> API Keys (<code>X-API-Key</code>), Bearer tokens, Passwords, User HR/LMS private profiles, and raw document contents are strictly redacted and omitted from production logs and metric labels.
+  </div>
+</section>

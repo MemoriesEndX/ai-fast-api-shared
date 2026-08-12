@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import LoggingMiddleware, logger
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.exceptions import (
     http_exception_handler,
     validation_exception_handler,
@@ -24,6 +25,7 @@ app = FastAPI(
 
 # Global Exception Handlers
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(PermissionError, permission_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
@@ -79,6 +81,24 @@ async def ready():
     """Readiness probe checking dependency status."""
     from app.services.llm_service import get_llm_service
     return await readiness_check(llm_service=get_llm_service())
+
+
+@app.get("/metrics", tags=["Metrics"])
+async def root_metrics():
+    """Expose Prometheus text metrics endpoint at root level."""
+    from app.core.metrics import metrics_registry
+    from fastapi import Response
+    body = metrics_registry.generate_prometheus_metrics()
+    return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
+@app.get("/metrics/json", tags=["Metrics"])
+async def root_metrics_json():
+    """Expose JSON snapshot metrics endpoint at root level."""
+    from app.core.metrics import metrics_registry
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=metrics_registry.generate_json_metrics())
+
 
 
 if __name__ == "__main__":

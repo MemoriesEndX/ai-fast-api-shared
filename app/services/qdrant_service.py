@@ -107,6 +107,10 @@ class QdrantService:
 
     async def upsert_chunks(self, chunks_data: List[Dict[str, Any]]) -> bool:
         """Upsert document or video chunks into vector database."""
+        import time
+        from app.core.metrics import metrics_registry
+        start_time = time.time()
+        metrics_registry.inc("qdrant_requests_total", labels={"operation": "upsert"})
         self._get_client()
 
         if not chunks_data:
@@ -149,7 +153,9 @@ class QdrantService:
                     collection_name=self.collection_name,
                     points=points,
                 )
-                logger.info(f"Successfully upserted {len(points)} chunks into Qdrant.")
+                duration = time.time() - start_time
+                metrics_registry.observe("qdrant_latency_seconds", duration, labels={"operation": "upsert"})
+                logger.info(f"Successfully upserted {len(points)} chunks into Qdrant in {duration*1000:.2f}ms.")
                 return True
             except Exception as e:
                 logger.error(f"Failed to upsert to Qdrant: {e}")
@@ -180,6 +186,8 @@ class QdrantService:
                     "text": item["text"],
                 }
             })
+        duration = time.time() - start_time
+        metrics_registry.observe("qdrant_latency_seconds", duration, labels={"operation": "upsert"})
         return True
 
     async def search_similar(
@@ -192,6 +200,10 @@ class QdrantService:
         score_threshold: float = settings.RAG_SCORE_THRESHOLD,
     ) -> List[Dict[str, Any]]:
         """Search similar document or video/audio chunks strictly filtered by application tenant, optional document_id, and optional source_type."""
+        import time
+        from app.core.metrics import metrics_registry
+        start_time = time.time()
+        metrics_registry.inc("qdrant_requests_total", labels={"operation": "search"})
         self._get_client()
 
         if self.client and self.client != "in_memory":
@@ -258,6 +270,8 @@ class QdrantService:
                         "score": round(float(hit.score), 4),
                         "application": hit.payload.get("application"),
                     })
+                duration = time.time() - start_time
+                metrics_registry.observe("qdrant_latency_seconds", duration, labels={"operation": "search"})
                 return results
             except Exception as e:
                 logger.error(f"Qdrant search error: {e}")
@@ -298,6 +312,8 @@ class QdrantService:
                 })
 
         results.sort(key=lambda x: x["score"], reverse=True)
+        duration = time.time() - start_time
+        metrics_registry.observe("qdrant_latency_seconds", duration, labels={"operation": "search"})
         return results[:top_k]
 
     async def get_document_metadata(self, application: str, document_id: str) -> Optional[Dict[str, Any]]:

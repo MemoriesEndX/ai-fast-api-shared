@@ -720,6 +720,11 @@ class RAGService:
         score_threshold: float = settings.RAG_SCORE_THRESHOLD,
     ) -> List[Dict[str, Any]]:
         """Search similar document or video/audio chunks with strict application filter and optional document_id or source_type filter."""
+        import time
+        from app.core.metrics import metrics_registry
+        start_time = time.time()
+        metrics_registry.inc("rag_requests_total", labels={"application": application})
+
         query_vector = self.embedding_service.embed_text(query)
         results = await self.qdrant_service.search_similar(
             query_vector=query_vector,
@@ -729,6 +734,8 @@ class RAGService:
             top_k=top_k,
             score_threshold=score_threshold,
         )
+        duration = time.time() - start_time
+        metrics_registry.observe("rag_latency_seconds", duration, labels={"application": application})
         return results
 
     async def chat_completion(self, request: ChatRequest) -> ChatResponse:

@@ -1,4 +1,5 @@
 import logging
+import time
 import httpx
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -61,15 +62,26 @@ class LlamaCppLLMService(BaseLLMService):
         }
 
         endpoint = f"{self.base_url}/v1/chat/completions"
+        start_time = time.time()
+        from app.core.metrics import metrics_registry
+        metrics_registry.inc("llm_requests_total", labels={"model": self.model_name, "provider": self.provider_name})
 
         try:
             # Short 1.5s connect timeout for fast offline detection
             request_timeout = httpx.Timeout(self.timeout, connect=1.5)
             async with httpx.AsyncClient(timeout=request_timeout) as client:
                 response = await client.post(endpoint, json=payload)
+                duration = time.time() - start_time
+                metrics_registry.observe("llm_latency_seconds", duration, labels={"model": self.model_name})
                 
                 if response.status_code == 200:
                     data = response.json()
+                    usage = data.get("usage", {})
+                    if usage and isinstance(usage, dict):
+                        total_tokens = usage.get("total_tokens", 0)
+                        if total_tokens > 0:
+                            metrics_registry.inc("llm_tokens_total", value=float(total_tokens), labels={"model": self.model_name})
+
                     choices = data.get("choices", [])
                     if choices and len(choices) > 0:
                         content = choices[0].get("message", {}).get("content", "")
@@ -90,6 +102,8 @@ class LlamaCppLLMService(BaseLLMService):
                 )
 
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as exc:
+            duration = time.time() - start_time
+            metrics_registry.observe("llm_latency_seconds", duration, labels={"model": self.model_name})
             logger.warning(f"llama-server connection failed: {exc}")
             # Fallback for development / test mode if llama-server container is offline
             if settings.APP_ENV in ("development", "test"):

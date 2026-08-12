@@ -10,6 +10,7 @@
     'video-rag': { title: 'Video RAG API Reference', page: 'pages/video-rag.html', tag: 'Video RAG' },
     'recommendation': { title: 'Recommendation Engine API', page: 'pages/recommendation.html', tag: 'Recommendation' },
     'lms-tools': { title: 'LMS Tools Integration', page: 'pages/lms-tools.html', tag: 'Tools' },
+    'monitoring': { title: 'Observability & Monitoring', page: 'pages/monitoring.html', tag: 'Metrics' },
     'errors': { title: 'Error Catalog', page: 'pages/errors.html', tag: null },
     'examples': { title: 'Code Examples', page: 'pages/examples.html', tag: null },
   };

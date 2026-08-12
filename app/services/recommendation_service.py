@@ -471,10 +471,18 @@ class RecommendationEngine:
         request: RecommendationRequest,
     ) -> RecommendationResponse:
         """Process recommendation request, rank candidates, and generate Qwen explanation."""
+        import time
+        from app.core.metrics import metrics_registry
+        start_time = time.time()
+        app_label = str(request.application)
+        metrics_registry.inc("recommendation_requests_total", labels={"application": app_label})
+
         recommendations = self.scoring_service.generate_recommendations(request)
         timestamp = datetime.now(timezone.utc).isoformat()
 
         if not recommendations:
+            duration = time.time() - start_time
+            metrics_registry.observe("recommendation_latency_seconds", duration, labels={"application": app_label})
             return RecommendationResponse(
                 application=request.application,
                 user_id=request.user.id,
@@ -506,7 +514,6 @@ class RecommendationEngine:
                     f"Role/Posisi: {request.user.role or request.user.position or request.user.department or 'Staff'}\n"
                 )
                 user_prompt = f"{user_info}\nRekomendasi Pilihan:\n{top_rec_bullets}\n\nPenjelasan Singkat:"
-
                 explanation = await self.llm_service.generate_explanation(system_prompt, user_prompt)
                 if not explanation:
                     explanation_status = "unavailable"
@@ -514,6 +521,9 @@ class RecommendationEngine:
                 logger.warning(f"Qwen explanation generation failed: {exc}")
                 explanation = None
                 explanation_status = "unavailable"
+
+        duration = time.time() - start_time
+        metrics_registry.observe("recommendation_latency_seconds", duration, labels={"application": app_label})
 
         return RecommendationResponse(
             application=request.application,

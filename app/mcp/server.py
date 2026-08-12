@@ -71,21 +71,29 @@ class MCPServer:
 
         # Execute Tool Handler with Timeout
         timeout = settings.TOOL_TIMEOUT
+        app_label = auth_context.application if auth_context else "shared"
+        from app.core.metrics import metrics_registry
+        metrics_registry.inc("mcp_tool_calls_total", labels={"tool": name, "application": app_label})
+
         try:
             if inspect.iscoroutinefunction(tool.handler):
                 result = await asyncio.wait_for(tool.handler(**handler_kwargs), timeout=timeout)
             else:
                 result = tool.handler(**handler_kwargs)
 
-            duration_ms = round((time.time() - start_time) * 1000, 2)
+            duration_sec = time.time() - start_time
+            duration_ms = round(duration_sec * 1000, 2)
+            metrics_registry.observe("mcp_tool_latency_seconds", duration_sec, labels={"tool": name})
             logger.info(
-                f"MCP Tool '{name}' executed successfully for user_id={auth_context.user_id if auth_context else 'None'} in {duration_ms} ms."
+                f"MCP Tool '{name}' executed successfully for app={app_label} user_id={auth_context.user_id if auth_context else 'None'} in {duration_ms} ms."
             )
             return result
 
         except asyncio.TimeoutError:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-            logger.error(f"MCP Tool '{name}' timed out after {timeout} seconds.")
+            duration_sec = time.time() - start_time
+            duration_ms = round(duration_sec * 1000, 2)
+            metrics_registry.observe("mcp_tool_latency_seconds", duration_sec, labels={"tool": name})
+            logger.error(f"MCP Tool '{name}' timed out after {timeout} seconds for app={app_label}.")
             return {
                 "error": {
                     "code": "TOOL_TIMEOUT",
@@ -93,8 +101,10 @@ class MCPServer:
                 }
             }
         except Exception as e:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-            logger.error(f"Error executing MCP tool '{name}': {e}", exc_info=True)
+            duration_sec = time.time() - start_time
+            duration_ms = round(duration_sec * 1000, 2)
+            metrics_registry.observe("mcp_tool_latency_seconds", duration_sec, labels={"tool": name})
+            logger.error(f"Error executing MCP tool '{name}' for app={app_label}: {e}", exc_info=True)
             # Never expose internal SQL, stack trace, or credentials
             return {
                 "error": {
