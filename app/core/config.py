@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     OWL_BASE_URL: str = "http://owl-app.local"
     HR_CORNER_BASE_URL: str = "http://hr-corner-app.local"
+    CINEKU_BASE_URL: str = "http://cineku-app.local"
 
     # LLM Settings
     LLM_PROVIDER: str = "llama_cpp"
@@ -84,6 +85,7 @@ class Settings(BaseSettings):
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"
     HR_AI_API_KEY: str = "hr-corner-secret-api-key"
+    CINEKU_AI_API_KEY: str = "cineku-secret-api-key"
 
     CHAT_RATE_LIMIT_PER_MINUTE: int = 60
     INGESTION_RATE_LIMIT_PER_MINUTE: int = 20

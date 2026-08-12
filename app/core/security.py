@@ -16,7 +16,7 @@ async def verify_api_key(
 ) -> str:
     """
     Verify API Key / Bearer Token authentication.
-    Returns the identified application client identifier ('owl', 'hr-corner', or 'shared-ai').
+    Returns the identified application client identifier ('owl', 'hr-corner', 'cineku', or 'shared-ai').
     """
     if not settings.AI_API_AUTH_ENABLED:
         return "shared-ai"
@@ -31,6 +31,7 @@ async def verify_api_key(
         settings.AI_API_KEY: "shared-ai",
         settings.OWL_AI_API_KEY: "owl",
         settings.HR_AI_API_KEY: "hr-corner",
+        settings.CINEKU_AI_API_KEY: "cineku",
     }
     
     # Filter empty or unconfigured keys
@@ -61,21 +62,14 @@ def validate_tenant_auth(client_app: str, requested_app: str) -> None:
     client_app_clean = client_app.strip().lower()
     requested_app_clean = requested_app.strip().lower()
 
-    if client_app_clean == "owl" and requested_app_clean == "hr-corner":
-        logger.warning("Tenant isolation breach attempt: OWL credentials requested HR-Corner data.")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "TENANT_ACCESS_DENIED",
-                "message": "Access denied. Application 'owl' credentials are not authorized to access 'hr-corner' tenant data."
-            }
+    if client_app_clean != requested_app_clean:
+        logger.warning(
+            f"Tenant isolation breach attempt: '{client_app_clean}' credentials requested '{requested_app_clean}' tenant data."
         )
-    elif client_app_clean == "hr-corner" and requested_app_clean == "owl":
-        logger.warning("Tenant isolation breach attempt: HR-Corner credentials requested OWL data.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "TENANT_ACCESS_DENIED",
-                "message": "Access denied. Application 'hr-corner' credentials are not authorized to access 'owl' tenant data."
+                "message": f"Access denied. Application '{client_app_clean}' credentials are not authorized to access '{requested_app_clean}' tenant data."
             }
         )

@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.application import ApplicationEnum, ApplicationHealthResponse
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.owl_service import OWLService
+from app.services.cineku_service import CinekuService
 from app.services.rag_service import RAGService
 from app.core.security import verify_api_key, validate_tenant_auth
 from app.core.rate_limit import check_chat_rate_limit
 
-router = APIRouter(prefix="/owl", tags=["OWL Application Foundation"])
+router = APIRouter(prefix="/cineku", tags=["Cineku Application Foundation"])
 
 
-def get_owl_service() -> OWLService:
-    return OWLService()
+def get_cineku_service() -> CinekuService:
+    return CinekuService()
 
 
 def get_rag_service() -> RAGService:
@@ -18,23 +18,23 @@ def get_rag_service() -> RAGService:
 
 
 @router.get("/health", response_model=ApplicationHealthResponse)
-async def owl_health_check(service: OWLService = Depends(get_owl_service)):
-    """OWL Application integration health endpoint."""
+async def cineku_health_check(service: CinekuService = Depends(get_cineku_service)):
+    """Cineku Application integration health endpoint."""
     return await service.get_health_status()
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def owl_chat_endpoint(
+async def cineku_chat_endpoint(
     request: ChatRequest,
     client_app: str = Depends(verify_api_key),
     _: None = Depends(check_chat_rate_limit),
     rag_service: RAGService = Depends(get_rag_service),
 ):
-    """OWL Application dedicated Chat completion endpoint."""
-    request.application = ApplicationEnum.OWL
+    """Cineku Application dedicated Chat completion endpoint."""
+    request.application = ApplicationEnum.CINEKU
 
     # 1. Tenant Authorization Check
-    validate_tenant_auth(client_app, "owl")
+    validate_tenant_auth(client_app, "cineku")
 
     # 2. Input Validation Bounds
     if len(request.message.strip()) == 0:

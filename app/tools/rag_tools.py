@@ -30,7 +30,7 @@ async def search_pdf_knowledge(
     from app.services.qdrant_service import qdrant_service
 
     app_name = auth_context.application if auth_context else application
-    ToolAuthorizationService.validate_tenant_access(UserAuthContext(user_id=1, application=app_name), required_application="owl")
+    ToolAuthorizationService.validate_tenant_access(UserAuthContext(user_id=1, application=app_name), required_application=app_name)
 
     doc_id_str = str(document_id) if document_id is not None else None
     safe_top_k = min(max(1, top_k), 10)
@@ -99,7 +99,7 @@ async def search_video_transcript(
     from app.services.qdrant_service import qdrant_service
 
     app_name = auth_context.application if auth_context else application
-    ToolAuthorizationService.validate_tenant_access(UserAuthContext(user_id=1, application=app_name), required_application="owl")
+    ToolAuthorizationService.validate_tenant_access(UserAuthContext(user_id=1, application=app_name), required_application=app_name)
 
     doc_id_str = str(document_id) if document_id is not None else None
     safe_top_k = min(max(1, top_k), 10)

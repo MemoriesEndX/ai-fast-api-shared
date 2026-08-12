@@ -27,7 +27,8 @@ class AgentOrchestrator:
 
     async def process_chat(self, request: ChatRequest) -> ChatResponse:
         start_time = time.perf_counter()
-        app_name = str(request.application).lower()
+        raw_app = request.application.value if hasattr(request.application, 'value') else str(request.application)
+        app_name = str(raw_app).lower().replace("applicationenum.", "").strip()
         user_id = request.user_id or 1
         conversation_id = conversation_manager.get_or_create_conversation_id(request.conversation_id)
 
@@ -65,9 +66,9 @@ class AgentOrchestrator:
                 logger.warning(f"Reached MAX_TOOL_CALLS limit ({max_calls}). Stopping tool loop.")
                 break
 
-            # Tenant isolation enforcement: HR-Corner cannot execute OWL LMS tools
-            if app_name == "hr-corner" and tool_name not in ["search_pdf_knowledge", "search_video_transcript"]:
-                logger.warning(f"Tenant isolation breach attempt: hr-corner application requested OWL tool '{tool_name}'.")
+            # Tenant isolation enforcement: non-OWL applications (hr-corner, cineku) cannot execute OWL LMS tools
+            if app_name in ["hr-corner", "cineku"] and tool_name not in ["search_pdf_knowledge", "search_video_transcript"]:
+                logger.warning(f"Tenant isolation breach attempt: '{app_name}' application requested OWL tool '{tool_name}'.")
                 continue
 
             args: Dict[str, Any] = {}
@@ -96,12 +97,15 @@ class AgentOrchestrator:
 
             try:
                 res = await mcp_server.execute_tool(tool_name, args, auth_context=auth_context)
-                tools_executed.append(tool_name)
-                tool_results.append({
-                    "tool": tool_name,
-                    "args": args,
-                    "result": res
-                })
+                if isinstance(res, dict) and "error" in res:
+                    logger.warning(f"MCP Tool '{tool_name}' returned error: {res['error']}")
+                else:
+                    tools_executed.append(tool_name)
+                    tool_results.append({
+                        "tool": tool_name,
+                        "args": args,
+                        "result": res
+                    })
             except Exception as exc:
                 logger.error(f"Error executing tool '{tool_name}' in Agent orchestrator: {exc}")
 
@@ -120,8 +124,8 @@ class AgentOrchestrator:
             except Exception as e:
                 logger.error(f"Error during RAG fallback search: {e}")
 
-        # 3. Extract Conversation History
-        history = conversation_manager.get_history(conversation_id)
+        # 3. Extract Conversation History (Tenant Isolated)
+        history = conversation_manager.get_history(conversation_id, application=app_name)
 
         # 4. Extract Citations & Standardized Sources
         sources = self._extract_sources(tool_results, context_chunks)
@@ -132,11 +136,12 @@ class AgentOrchestrator:
             tool_results=tool_results,
             context_chunks=context_chunks,
             history=history,
-            intents=intents
+            intents=intents,
+            app_name=app_name,
         )
 
-        # 6. Record Turn in Conversation Context
-        conversation_manager.add_turn(conversation_id, request.message, final_answer)
+        # 6. Record Turn in Conversation Context (Tenant Isolated)
+        conversation_manager.add_turn(conversation_id, request.message, final_answer, application=app_name)
 
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -237,6 +242,7 @@ class AgentOrchestrator:
         context_chunks: List[Dict[str, Any]],
         history: List[Dict[str, str]],
         intents: List[AgentIntent],
+        app_name: str = "owl",
     ) -> str:
         """Synthesize a concise, grounded natural language answer using Qwen or deterministic fallback."""
 
@@ -257,14 +263,33 @@ class AgentOrchestrator:
         if history:
             history_str = "\nConversation History:\n" + "\n".join([f"{h['role'].capitalize()}: {h['content']}" for h in history[-4:]]) + "\n"
 
-        system_prompt = (
-            "You are the Unified OWL LMS AI Assistant.\n"
-            "CRITICAL SECURITY RULES:\n"
-            "1. Never invent LMS data, user progress, assessment scores, content availability, PDF citations, video timestamps, or recommendation reasons.\n"
-            "2. Base your answer strictly on the provided Tool Outputs and Conversation History.\n"
-            "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi yang tersedia.'\n"
-            "4. Answer concisely, professionally, and directly in Indonesian without self-referential prefixes."
-        )
+        if app_name.lower() == "cineku":
+            system_prompt = (
+                "You are the Cineku AI Assistant.\n"
+                "CRITICAL SECURITY RULES:\n"
+                "1. Never invent film database data, user watch history, recommendation reasons, or Cineku records.\n"
+                "2. Base your answer strictly on the provided Grounding Data and Conversation History.\n"
+                "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi Cineku yang tersedia.'\n"
+                "4. Answer concisely, professionally, and directly in Indonesian without self-referential prefixes."
+            )
+        elif app_name.lower() == "hr-corner":
+            system_prompt = (
+                "You are the HR Corner AI Assistant.\n"
+                "CRITICAL SECURITY RULES:\n"
+                "1. Never invent HR employee data, private policies, or internal records.\n"
+                "2. Base your answer strictly on the provided Grounding Data and Conversation History.\n"
+                "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi yang tersedia.'\n"
+                "4. Answer concisely, professionally, and directly in Indonesian without self-referential prefixes."
+            )
+        else:
+            system_prompt = (
+                "You are the Unified OWL LMS AI Assistant.\n"
+                "CRITICAL SECURITY RULES:\n"
+                "1. Never invent LMS data, user progress, assessment scores, content availability, PDF citations, video timestamps, or recommendation reasons.\n"
+                "2. Base your answer strictly on the provided Tool Outputs and Conversation History.\n"
+                "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi yang tersedia.'\n"
+                "4. Answer concisely, professionally, and directly in Indonesian without self-referential prefixes."
+            )
 
         user_prompt = (
             f"{history_str}\n"

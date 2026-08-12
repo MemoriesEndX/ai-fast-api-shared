@@ -46,8 +46,10 @@ class MCPServer:
                     }
                 }
             try:
-                # 1. Enforce tenant isolation
-                ToolAuthorizationService.validate_tenant_access(auth_context, required_application="owl")
+                # 1. Enforce tenant isolation based on tool owner
+                shared_tools = {"search_pdf_knowledge", "search_video_transcript"}
+                required_app = auth_context.application if name in shared_tools else "owl"
+                ToolAuthorizationService.validate_tenant_access(auth_context, required_application=required_app)
 
                 # 2. Enforce user isolation if user_id is provided in arguments
                 if "user_id" in arguments and arguments["user_id"] is not None:

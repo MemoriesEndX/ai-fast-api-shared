@@ -17,7 +17,7 @@ class UserAuthContext(BaseModel):
     division: Optional[str] = "General"
     position: Optional[str] = "Employee"
     role: str = Field(default="User", description="User role: User, Supervisor, Admin, SuperAdmin")
-    application: str = Field(default="owl", description="Tenant application: owl or hr-corner")
+    application: str = Field(default="owl", description="Tenant application: owl, hr-corner, or cineku")
 
 
 class ToolAuthorizationService:
@@ -31,7 +31,7 @@ class ToolAuthorizationService:
                 f"Tenant isolation breach attempt: application '{auth_context.application}' requested '{required_application}' tool."
             )
             raise PermissionError(
-                f"Access denied. Application '{auth_context.application}' is not authorized for '{required_application}' LMS tools."
+                f"Access denied. Application '{auth_context.application}' is not authorized to access '{required_application}' tools."
             )
 
     @staticmethod
