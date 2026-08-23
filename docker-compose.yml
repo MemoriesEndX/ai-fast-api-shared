@@ -47,11 +47,10 @@ services:
           memory: 512M
 
   llama-server:
-    image: ghcr.io/ggerganov/llama.cpp:server
+    image: ghcr.io/ggml-org/llama.cpp:server
     container_name: llama-server
     restart: unless-stopped
     command: >
-      /llama-server
       -m /models/qwen2.5-0.5b/qwen2.5-0.5b-instruct-q4_k_m.gguf
       -c 2048
       -n 512
@@ -75,7 +74,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.00'
+          cpus: '2.00'
           memory: 2048M
         reservations:
           cpus: '1.00'
@@ -90,7 +89,7 @@ services:
     networks:
       - ai-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -108,3 +107,28 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+  ai-cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ai-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_AI_TUNNEL_TOKEN:-}
+    networks:
+      - ai-network
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+

@@ -52,7 +52,6 @@ coverage.xml
 models/
 *.gguf
 
-# Documentation and temporary logs
-docs/
+# Temporary logs and cache
 *.log
 tmp/

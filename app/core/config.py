@@ -80,16 +80,17 @@ class Settings(BaseSettings):
         "search_video_transcript",
     ]
 
-    # Phase 9 REST API Hardening & Security Configuration
-    AI_API_AUTH_ENABLED: bool = True
+    # Phase 9 REST API Hardening & Security Configuration (Step 33 Public API Mode)
+    AI_API_AUTH_ENABLED: bool = False
     AI_API_KEY: str = "dev-shared-ai-key-change-in-production"
     OWL_AI_API_KEY: str = "owl-secret-api-key"
     HR_AI_API_KEY: str = "hr-corner-secret-api-key"
     CINEKU_AI_API_KEY: str = "cineku-secret-api-key"
 
-    CHAT_RATE_LIMIT_PER_MINUTE: int = 60
-    INGESTION_RATE_LIMIT_PER_MINUTE: int = 20
-    SEARCH_RATE_LIMIT_PER_MINUTE: int = 120
+    CHAT_RATE_LIMIT_PER_MINUTE: int = 100
+    CHAT_RATE_LIMIT_BURST: int = 20
+    INGESTION_RATE_LIMIT_PER_MINUTE: int = 100
+    SEARCH_RATE_LIMIT_PER_MINUTE: int = 100
     HEALTH_RATE_LIMIT_PER_MINUTE: int = 300
     MAX_RETRIES: int = 2
 

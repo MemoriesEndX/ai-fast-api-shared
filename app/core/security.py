@@ -1,18 +1,15 @@
 import logging
 from typing import Optional, Dict
-from fastapi import HTTPException, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, APIKeyHeader
+from fastapi import HTTPException, Header, Request, status
 from app.core.config import settings
 
 logger = logging.getLogger("ai_service.core.security")
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-bearer_security = HTTPBearer(auto_error=False)
-
 
 async def verify_api_key(
-    header_key: Optional[str] = Security(api_key_header),
-    bearer: Optional[HTTPAuthorizationCredentials] = Security(bearer_security),
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
 ) -> str:
     """
     Verify API Key / Bearer Token authentication.
@@ -22,10 +19,10 @@ async def verify_api_key(
         return "shared-ai"
 
     token = None
-    if bearer and bearer.credentials:
-        token = bearer.credentials
-    elif header_key:
-        token = header_key
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    elif x_api_key:
+        token = x_api_key
 
     valid_keys: Dict[str, str] = {
         settings.AI_API_KEY: "shared-ai",
