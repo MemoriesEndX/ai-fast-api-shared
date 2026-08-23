@@ -2,7 +2,7 @@ import logging
 import time
 import httpx
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import HTTPException, status
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -27,6 +27,19 @@ class BaseLLMService(ABC):
     @abstractmethod
     async def generate_explanation(self, system_prompt: str, prompt: str) -> Optional[str]:
         """Generate text explanation safely (returns None if offline)."""
+        pass
+
+    @abstractmethod
+    async def generate_completion(
+        self,
+        prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 256,
+    ) -> Optional[str]:
+        """Generate chat completion from LLM backend."""
         pass
 
 
@@ -146,6 +159,53 @@ class LlamaCppLLMService(BaseLLMService):
                             return content.strip()
         except Exception as exc:
             logger.warning(f"Failed to generate LLM explanation: {exc}")
+        return None
+
+    async def generate_completion(
+        self,
+        prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 256,
+    ) -> Optional[str]:
+        """Generate chat completion from LLM backend."""
+        final_messages = []
+        if messages:
+            final_messages = list(messages)
+        else:
+            if system_prompt:
+                final_messages.append({"role": "system", "content": system_prompt})
+            if user_prompt:
+                final_messages.append({"role": "user", "content": user_prompt})
+            elif prompt:
+                final_messages.append({"role": "user", "content": prompt})
+
+        if not final_messages:
+            return None
+
+        payload = {
+            "model": self.model_name,
+            "messages": final_messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        endpoint = f"{self.base_url}/v1/chat/completions"
+        try:
+            request_timeout = httpx.Timeout(self.timeout, connect=2.0)
+            async with httpx.AsyncClient(timeout=request_timeout) as client:
+                response = await client.post(endpoint, json=payload)
+                if response.status_code == 200:
+                    data = response.json()
+                    choices = data.get("choices", [])
+                    if choices and len(choices) > 0:
+                        content = choices[0].get("message", {}).get("content", "")
+                        if content and content.strip():
+                            return content.strip()
+                logger.warning(f"llama-server returned HTTP {response.status_code}: {response.text[:200]}")
+        except Exception as exc:
+            logger.warning(f"Failed to generate LLM completion: {exc}")
         return None
 
     async def check_health(self) -> Dict[str, Any]:

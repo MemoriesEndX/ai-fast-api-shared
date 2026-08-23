@@ -96,6 +96,7 @@ async def get_learning_recommendations(user_id: int, limit: int = 5, auth_contex
         assessment_results=assessment_items,
         candidates=candidates,
         limit=safe_limit,
+        include_explanation=False,
     )
 
     # 5. Delegate to RecommendationEngine

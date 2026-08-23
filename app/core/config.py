@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     LMS_API_TIMEOUT: float = 10.0
     MCP_ENABLED: bool = True
     MCP_MAX_TOOL_CALLS: int = 5
-    TOOL_TIMEOUT: float = 15.0
+    TOOL_TIMEOUT: float = 30.0
 
     # Phase 8 Agent & Conversation Settings
     CHAT_MAX_HISTORY: int = 5
