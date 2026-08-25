@@ -20,7 +20,7 @@ from fastapi.openapi.utils import get_openapi
 app = FastAPI(
     title=f"{settings.APP_NAME} API Gateway",
     description=(
-        "Multi-tenant Shared AI Service API Gateway serving OWL LMS, HR Corner, Cineku, "
+        "Multi-tenant Shared AI Service API Gateway serving OWL LMS, HR Corner, Public Chat, "
         "and future enterprise applications. Provides unified agent chat completion, "
         "multimodal RAG engine, knowledge management, and personalized recommendations."
     ),

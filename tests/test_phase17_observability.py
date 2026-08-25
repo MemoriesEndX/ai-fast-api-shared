@@ -1,10 +1,17 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 from app.core.logging import sanitize_log_data, resolve_tenant_from_request
 from app.core.metrics import metrics_registry
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 def test_request_id_auto_generation():
@@ -89,8 +96,8 @@ def test_tenant_logging_resolution():
     from starlette.datastructures import Headers
 
     # Test via Header
-    req1 = Request({"type": "http", "method": "POST", "path": "/api/v1/chat", "headers": Headers({"x-application-id": "cineku"}).raw})
-    assert resolve_tenant_from_request(req1) == "cineku"
+    req1 = Request({"type": "http", "method": "POST", "path": "/api/v1/chat", "headers": Headers({"x-application-id": "public-chat"}).raw})
+    assert resolve_tenant_from_request(req1) == "public-chat"
 
     # Test via Path
     req2 = Request({"type": "http", "method": "POST", "path": "/api/v1/owl/chat", "headers": Headers({}).raw})
@@ -98,6 +105,9 @@ def test_tenant_logging_resolution():
 
     req3 = Request({"type": "http", "method": "POST", "path": "/api/v1/hr-corner/chat", "headers": Headers({}).raw})
     assert resolve_tenant_from_request(req3) == "hr-corner"
+
+    req4 = Request({"type": "http", "method": "POST", "path": "/api/v1/public/chat", "headers": Headers({}).raw})
+    assert resolve_tenant_from_request(req4) == "public-chat"
 
 
 def test_secret_sanitization_audit():
@@ -135,9 +145,9 @@ def test_error_response_contains_request_id():
 def test_failure_simulation_401_unauthorized():
     """Failure test: Request with missing or invalid API key returns 401 with request_id."""
     response = client.post(
-        "/api/v1/cineku/chat",
-        headers={"X-API-Key": "invalid-cineku-key"},
-        json={"application": "cineku", "message": "Halo"}
+        "/api/v1/public/chat",
+        headers={"X-API-Key": "invalid-public-key"},
+        json={"application": "public-chat", "message": "Halo"}
     )
     assert response.status_code == 401
     data = response.json()
@@ -146,10 +156,10 @@ def test_failure_simulation_401_unauthorized():
 
 
 def test_failure_simulation_403_tenant_forbidden():
-    """Failure test: Cineku API key accessing OWL endpoint returns 403 Forbidden with request_id."""
+    """Failure test: Public Chat API key accessing OWL endpoint returns 403 Forbidden with request_id."""
     response = client.post(
         "/api/v1/owl/chat",
-        headers={"X-API-Key": "cineku-secret-api-key"},
+        headers={"X-API-Key": "public-chat-secret-api-key"},
         json={"application": "owl", "message": "Halo OWL"}
     )
     assert response.status_code == 403

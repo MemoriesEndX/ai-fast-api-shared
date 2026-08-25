@@ -4,6 +4,7 @@ import pytest
 import asyncio
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 from app.evaluation.dataset import get_evaluation_dataset
 from app.evaluation.runner import run_evaluation
 from app.evaluation.evaluators import EvaluationEngine, SecurityEvaluator, DeterministicEvaluator
@@ -13,6 +14,12 @@ client = TestClient(app)
 
 OWL_HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 HR_HEADERS = {"Authorization": "Bearer hr-corner-secret-api-key"}
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 def test_golden_dataset_integrity():

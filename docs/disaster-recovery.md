@@ -1,7 +1,7 @@
 # Shared AI Service — Disaster Recovery & Production Reliability Runbook
 
 > **Document Version:** 1.0  
-> **Target System:** Multi-Tenant Shared AI Service (OWL LMS, HR Corner, Cineku)  
+> **Target System:** Multi-Tenant Shared AI Service (OWL LMS, HR Corner, Public Chat)  
 > **Last Updated:** August 2026  
 
 ---
@@ -15,8 +15,8 @@ The Multi-Tenant Shared AI Service runs as a containerized stack orchestrated vi
                                                  │
                    ┌─────────────────────────────┼─────────────────────────────┐
                    ▼                             ▼                             ▼
-                OWL LMS                      HR Corner                       Cineku
-             (owl-app.local)            (hr-corner-app.local)           (cineku-app.local)
+                OWL LMS                      HR Corner                    Public Chat
+             (owl-app.local)            (hr-corner-app.local)          (public-chat.local)
                    │                             │                             │
                    └─────────────────────────────┼─────────────────────────────┘
                                                  │

@@ -2,6 +2,7 @@ import io
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 
 client = TestClient(app)
 
@@ -9,6 +10,12 @@ OWL_HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 HR_HEADERS = {"Authorization": "Bearer hr-corner-secret-api-key"}
 SHARED_HEADERS = {"Authorization": "Bearer dev-shared-ai-key-change-in-production"}
 INVALID_HEADERS = {"Authorization": "Bearer invalid-secret-token"}
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 def test_auth_missing_token():

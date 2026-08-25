@@ -5,7 +5,7 @@ from pydantic import BaseModel
 class ApplicationEnum(str, Enum):
     OWL = "owl"
     HR_CORNER = "hr-corner"
-    CINEKU = "cineku"
+    PUBLIC_CHAT = "public-chat"
     FUTURE_APP = "future-app"
 
 

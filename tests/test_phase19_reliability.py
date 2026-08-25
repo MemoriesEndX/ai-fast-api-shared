@@ -12,7 +12,7 @@ client_no_raise = TestClient(app, raise_server_exceptions=False)
 
 OWL_HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 HR_HEADERS = {"Authorization": "Bearer hr-corner-secret-api-key"}
-CINEKU_HEADERS = {"Authorization": "Bearer cineku-secret-api-key"}
+PUBLIC_CHAT_HEADERS = {"Authorization": "Bearer public-chat-secret-api-key"}
 
 
 @pytest.mark.asyncio
@@ -152,10 +152,10 @@ def test_ai_service_restart_recovery():
     })
     assert res_hr.status_code == 200
 
-    res_cineku = client.post("/api/v1/chat", headers=CINEKU_HEADERS, json={
-        "application": "cineku", "user_id": 3, "message": "Rekomendasi film"
+    res_public = client.post("/api/v1/chat", headers=PUBLIC_CHAT_HEADERS, json={
+        "application": "public-chat", "user_id": 3, "message": "Halo AI"
     })
-    assert res_cineku.status_code == 200
+    assert res_public.status_code == 200
 
 
 @pytest.mark.asyncio

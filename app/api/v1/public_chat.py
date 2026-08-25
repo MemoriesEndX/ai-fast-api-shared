@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.application import ApplicationEnum, ApplicationHealthResponse
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.cineku_service import CinekuService
+from app.services.public_chat_service import PublicChatService
 from app.services.rag_service import RAGService
 from app.core.security import verify_api_key, validate_tenant_auth
 from app.core.rate_limit import check_chat_rate_limit
 
-router = APIRouter(prefix="/cineku", tags=["Cineku Application Foundation"])
+router = APIRouter(prefix="/public", tags=["Public Chat"])
 
 
-def get_cineku_service() -> CinekuService:
-    return CinekuService()
+def get_public_chat_service() -> PublicChatService:
+    return PublicChatService()
 
 
 def get_rag_service() -> RAGService:
@@ -18,23 +18,23 @@ def get_rag_service() -> RAGService:
 
 
 @router.get("/health", response_model=ApplicationHealthResponse)
-async def cineku_health_check(service: CinekuService = Depends(get_cineku_service)):
-    """Cineku Application integration health endpoint."""
+async def public_chat_health_check(service: PublicChatService = Depends(get_public_chat_service)):
+    """Public Chat application integration health endpoint."""
     return await service.get_health_status()
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def cineku_chat_endpoint(
+async def public_chat_endpoint(
     request: ChatRequest,
     client_app: str = Depends(verify_api_key),
     _: None = Depends(check_chat_rate_limit),
     rag_service: RAGService = Depends(get_rag_service),
 ):
-    """Cineku Application dedicated Chat completion endpoint."""
-    request.application = ApplicationEnum.CINEKU
+    """Public Chat dedicated Chat completion endpoint."""
+    request.application = ApplicationEnum.PUBLIC_CHAT
 
     # 1. Tenant Authorization Check
-    validate_tenant_auth(client_app, "cineku")
+    validate_tenant_auth(client_app, "public-chat")
 
     # 2. Input Validation Bounds
     if len(request.message.strip()) == 0:

@@ -11,6 +11,12 @@ OWL_HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 HR_HEADERS = {"Authorization": "Bearer hr-corner-secret-api-key"}
 
 
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
+
+
 def test_liveness_probe():
     """Verify GET /health returns fast liveness response without performing heavy inference."""
     response = client.get("/health")

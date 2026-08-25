@@ -3,11 +3,18 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 
 client = TestClient(app)
 
 OWL_HEADERS = {"Authorization": "Bearer owl-secret-api-key"}
 HR_HEADERS = {"Authorization": "Bearer hr-corner-secret-api-key"}
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 def create_mock_pdf_bytes(text_content: str = "Knowledge Management Safety Rules") -> bytes:

@@ -17,7 +17,7 @@ class UserAuthContext(BaseModel):
     division: Optional[str] = "General"
     position: Optional[str] = "Employee"
     role: str = Field(default="User", description="User role: User, Supervisor, Admin, SuperAdmin")
-    application: str = Field(default="owl", description="Tenant application: owl, hr-corner, or cineku")
+    application: str = Field(default="owl", description="Tenant application: owl, hr-corner, or public-chat")
 
 
 class ToolAuthorizationService:

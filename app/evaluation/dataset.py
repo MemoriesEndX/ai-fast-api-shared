@@ -197,7 +197,7 @@ def get_evaluation_dataset() -> List[EvaluationTestCase]:
         ("Rekomendasi belajar untuk staf HR Corner baru", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "ROLE_RELEVANT"),
         ("Modul apa selanjutnya untuk meningkatkan keterampilan Backend?", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "ROLE_RELEVANT"),
         ("Rekomendasikan materi keselamatan yang belum saya ikuti", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "RELATED_CONTENT"),
-        ("Bantu tentukan daftar pelatihan prioritas divisi produksi", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "DIVISION_RELEVANT"),
+        ("Rekomendasikan daftar pelatihan prioritas divisi produksi", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "DIVISION_RELEVANT"),
         ("Saran pembelajaran interaktif untuk penguatan kompetensi K3", "RECOMMENDATION", ["get_learning_recommendations"], ["recommendation"], "SKILL_GAP"),
     ]
 

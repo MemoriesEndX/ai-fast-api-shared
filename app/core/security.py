@@ -13,7 +13,7 @@ async def verify_api_key(
 ) -> str:
     """
     Verify API Key / Bearer Token authentication.
-    Returns the identified application client identifier ('owl', 'hr-corner', 'cineku', or 'shared-ai').
+    Returns the identified application client identifier ('owl', 'hr-corner', 'public-chat', or 'shared-ai').
     """
     if not settings.AI_API_AUTH_ENABLED:
         return "shared-ai"
@@ -28,7 +28,7 @@ async def verify_api_key(
         settings.AI_API_KEY: "shared-ai",
         settings.OWL_AI_API_KEY: "owl",
         settings.HR_AI_API_KEY: "hr-corner",
-        settings.CINEKU_AI_API_KEY: "cineku",
+        settings.PUBLIC_CHAT_AI_API_KEY: "public-chat",
     }
     
     # Filter empty or unconfigured keys

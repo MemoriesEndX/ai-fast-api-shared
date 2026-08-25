@@ -258,8 +258,8 @@ class AgentOrchestrator:
                 logger.warning(f"Reached MAX_TOOL_CALLS limit ({max_calls}). Stopping tool selection.")
                 break
 
-            # Tenant isolation enforcement: non-OWL applications (hr-corner, cineku) cannot execute OWL LMS tools
-            if app_name in ["hr-corner", "cineku"] and tool_name not in ["search_pdf_knowledge", "search_video_transcript"]:
+            # Tenant isolation enforcement: non-OWL applications (hr-corner, public-chat) cannot execute OWL LMS tools
+            if app_name in ["hr-corner", "public-chat"] and tool_name not in ["search_pdf_knowledge", "search_video_transcript"]:
                 logger.warning(f"Tenant isolation breach attempt: '{app_name}' application requested OWL tool '{tool_name}'.")
                 continue
 
@@ -359,9 +359,9 @@ class AgentOrchestrator:
         app_name: str = "owl"
     ) -> str:
         """Generate a natural, conversational response for greetings, casual questions, and small talk."""
-        if app_name.lower() == "cineku":
+        if app_name.lower() == "public-chat":
             system_prompt = (
-                "You are Cineku AI Assistant, a friendly and helpful movie and entertainment assistant. "
+                "You are Public Chat AI Assistant, a friendly and helpful conversational assistant. "
                 "Respond naturally, warmly, politely, and clearly in Indonesian. "
                 "Do not mention internal database documents or rules unless asked."
             )
@@ -528,13 +528,13 @@ class AgentOrchestrator:
         if history:
             history_str = "\nConversation History:\n" + "\n".join([f"{h['role'].capitalize()}: {h['content']}" for h in history[-4:]]) + "\n"
 
-        if app_name.lower() == "cineku":
+        if app_name.lower() == "public-chat":
             system_prompt = (
-                "You are the Cineku AI Assistant.\n"
+                "You are the Public Chat AI Assistant.\n"
                 "CRITICAL SECURITY RULES:\n"
-                "1. Never invent film database data, user watch history, recommendation reasons, or Cineku records.\n"
+                "1. Never invent private organizational data, user records, or internal information.\n"
                 "2. Base your answer strictly on the provided Grounding Data and Conversation History.\n"
-                "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi Cineku yang tersedia.'\n"
+                "3. If required data is unavailable, state clearly: 'Informasi tersebut tidak ditemukan dalam materi yang tersedia.'\n"
                 "4. Answer concisely, professionally, and directly in Indonesian without self-referential prefixes."
             )
         elif app_name.lower() == "hr-corner":

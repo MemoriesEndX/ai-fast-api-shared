@@ -62,8 +62,8 @@ def resolve_tenant_from_request(request: Request) -> str:
         return "owl"
     elif "/api/v1/hr-corner" in path:
         return "hr-corner"
-    elif "/api/v1/cineku" in path:
-        return "cineku"
+    elif "/api/v1/public" in path:
+        return "public-chat"
     return "shared"
 
 

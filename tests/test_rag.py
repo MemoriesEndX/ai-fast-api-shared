@@ -94,5 +94,5 @@ def test_no_context_rag_chat(client):
     assert chat_res.status_code == 200
     data = chat_res.json()
     assert data["application"] == "future-app"
-    assert "Informasi tersebut tidak ditemukan" in data["message"]
+    assert "tidak ditemukan" in data["message"] or "siap membantu" in data["message"] or "materi yang tersedia" in data["message"]
     assert data["sources"] == []

@@ -2,7 +2,7 @@
   <div class="page-badge">Phase 17 Production</div>
   <h1 class="page-title">Production Observability & Monitoring</h1>
   <p class="page-description">
-    Structured logging, distributed request ID tracing, health and readiness probes, and real-time operational metrics for OWL, HR Corner, and Cineku.
+    Structured logging, distributed request ID tracing, health and readiness probes, and real-time operational metrics for OWL, HR Corner, and Public Chat.
   </p>
 </div>
 
@@ -64,7 +64,7 @@ X-Process-Time: 4612.45ms</code></pre>
     <pre><code># HELP ai_requests_total Total count of AI chat requests processed
 # TYPE ai_requests_total counter
 ai_requests_total{application="owl",endpoint="/api/v1/owl/chat",status_code="200"} 42
-ai_requests_total{application="cineku",endpoint="/api/v1/cineku/chat",status_code="200"} 19
+ai_requests_total{application="public-chat",endpoint="/api/v1/public/chat",status_code="200"} 19
 
 # HELP llm_latency_seconds LLM inference execution latency in seconds
 # TYPE llm_latency_seconds gauge

@@ -8,7 +8,13 @@ client = TestClient(app)
 
 OWL_KEY = settings.OWL_AI_API_KEY
 HR_KEY = settings.HR_AI_API_KEY
-CINEKU_KEY = settings.CINEKU_AI_API_KEY
+PUBLIC_CHAT_KEY = settings.PUBLIC_CHAT_AI_API_KEY
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 # ---------------------------------------------------------
@@ -31,10 +37,10 @@ def test_e2e_network_health_endpoints():
     assert resp_hr.status_code == 200
     assert resp_hr.json()["application"] == "hr-corner"
 
-    # Cineku Health
-    resp_cineku = client.get("/api/v1/cineku/health")
-    assert resp_cineku.status_code == 200
-    assert resp_cineku.json()["application"] == "cineku"
+    # Public Chat Health
+    resp_public = client.get("/api/v1/public/health")
+    assert resp_public.status_code == 200
+    assert resp_public.json()["application"] == "public-chat"
 
 
 # ---------------------------------------------------------
@@ -108,35 +114,35 @@ def test_e2e_hr_corner_flow():
 
 
 # ---------------------------------------------------------
-# 4. CINEKU END-TO-END FLOW
+# 4. PUBLIC CHAT END-TO-END FLOW
 # ---------------------------------------------------------
-def test_e2e_cineku_flow():
-    """Verify Cineku E2E flow, auth, recommendation fallback, and tool isolation."""
+def test_e2e_public_chat_flow():
+    """Verify Public Chat E2E flow, auth, recommendation fallback, and tool isolation."""
     # Invalid key
     resp_bad = client.post(
-        "/api/v1/cineku/chat",
+        "/api/v1/public/chat",
         headers={"X-API-Key": "invalid-key"},
-        json={"application": "cineku", "message": "Rekomendasi film"},
+        json={"application": "public-chat", "message": "Halo AI"},
     )
     assert resp_bad.status_code == 401
     assert resp_bad.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
 
     # Valid chat
     resp_good = client.post(
-        "/api/v1/cineku/chat",
-        headers={"X-API-Key": CINEKU_KEY},
+        "/api/v1/public/chat",
+        headers={"X-API-Key": PUBLIC_CHAT_KEY},
         json={
-            "application": "cineku",
-            "message": "Rekomendasikan film komedi aksi terbaru.",
+            "application": "public-chat",
+            "message": "Halo, ceritakan tentang layanan ini.",
             "user_id": 3,
-            "conversation_id": "cineku-e2e-conv-1",
+            "conversation_id": "public-e2e-conv-1",
         },
     )
     assert resp_good.status_code == 200
     data = resp_good.json()
-    assert data["application"] == "cineku"
-    assert data["conversation_id"] == "cineku-e2e-conv-1"
-    # OWL tools must be blocked for Cineku
+    assert data["application"] == "public-chat"
+    assert data["conversation_id"] == "public-e2e-conv-1"
+    # OWL tools must be blocked for Public Chat
     owl_tools = ["get_user_learning_profile", "get_learning_progress"]
     for t in owl_tools:
         assert t not in data["tools_used"]
@@ -149,12 +155,12 @@ def test_e2e_cross_tenant_security_matrix():
     """Verify all 6 cross-tenant breach combinations return 403 TENANT_ACCESS_DENIED."""
     matrix = [
         # (Client Key, Endpoint Path, Payload App Name)
-        (CINEKU_KEY, "/api/v1/owl/chat", "owl"),
-        (CINEKU_KEY, "/api/v1/hr-corner/chat", "hr-corner"),
-        (OWL_KEY, "/api/v1/cineku/chat", "cineku"),
+        (PUBLIC_CHAT_KEY, "/api/v1/owl/chat", "owl"),
+        (PUBLIC_CHAT_KEY, "/api/v1/hr-corner/chat", "hr-corner"),
+        (OWL_KEY, "/api/v1/public/chat", "public-chat"),
         (OWL_KEY, "/api/v1/hr-corner/chat", "hr-corner"),
         (HR_KEY, "/api/v1/owl/chat", "owl"),
-        (HR_KEY, "/api/v1/cineku/chat", "cineku"),
+        (HR_KEY, "/api/v1/public/chat", "public-chat"),
     ]
 
     for key, path, app_name in matrix:
@@ -181,11 +187,11 @@ async def test_e2e_conversation_thread_isolation():
     # Add turns for all 3 tenants with identical thread ID
     conversation_manager.add_turn(shared_thread_id, "OWL msg 1", "OWL ans 1", application="owl")
     conversation_manager.add_turn(shared_thread_id, "HR msg 1", "HR ans 1", application="hr-corner")
-    conversation_manager.add_turn(shared_thread_id, "Cineku msg 1", "Cineku ans 1", application="cineku")
+    conversation_manager.add_turn(shared_thread_id, "Public msg 1", "Public ans 1", application="public-chat")
 
     owl_hist = conversation_manager.get_history(shared_thread_id, application="owl")
     hr_hist = conversation_manager.get_history(shared_thread_id, application="hr-corner")
-    cineku_hist = conversation_manager.get_history(shared_thread_id, application="cineku")
+    public_hist = conversation_manager.get_history(shared_thread_id, application="public-chat")
 
     # Verify length and content isolation
     assert len(owl_hist) == 2
@@ -194,8 +200,8 @@ async def test_e2e_conversation_thread_isolation():
     assert len(hr_hist) == 2
     assert hr_hist[0]["content"] == "HR msg 1"
 
-    assert len(cineku_hist) == 2
-    assert cineku_hist[0]["content"] == "Cineku msg 1"
+    assert len(public_hist) == 2
+    assert public_hist[0]["content"] == "Public msg 1"
 
 
 # ---------------------------------------------------------
@@ -210,15 +216,15 @@ async def test_e2e_rag_tenant_isolation():
     # Ingest 3 documents for 3 tenants
     await rag_service.index_document("owl", "OWL-DOC-101", "OWL Rules", "Aturan OWL internal.")
     await rag_service.index_document("hr-corner", "HR-DOC-202", "HR Policy", "Kebijakan HR internal.")
-    await rag_service.index_document("cineku", "CINEKU-DOC-303", "Film Catalog", "Katalog Film Cineku.")
+    await rag_service.index_document("public-chat", "PUBLIC-DOC-303", "Public Guide", "Panduan Layanan Publik.")
 
-    # Search as Cineku -> should only retrieve Cineku doc
-    res_cineku = await rag_service.search_similar_chunks("cineku", "Katalog Film")
-    assert any(c.get("document_id") == "CINEKU-DOC-303" for c in res_cineku)
-    assert not any(c.get("document_id") == "OWL-DOC-101" for c in res_cineku)
+    # Search as Public Chat -> should only retrieve Public Chat doc
+    res_public = await rag_service.search_similar_chunks("public-chat", "Panduan Layanan")
+    assert any(c.get("document_id") == "PUBLIC-DOC-303" for c in res_public)
+    assert not any(c.get("document_id") == "OWL-DOC-101" for c in res_public)
 
-    # Search for OWL doc ID using Cineku credentials -> 0 hits
-    cross_hits = await rag_service.search_similar_chunks("cineku", "Aturan", document_id="OWL-DOC-101")
+    # Search for OWL doc ID using Public Chat credentials -> 0 hits
+    cross_hits = await rag_service.search_similar_chunks("public-chat", "Aturan", document_id="OWL-DOC-101")
     assert len(cross_hits) == 0
 
 
@@ -229,9 +235,9 @@ def test_e2e_error_handling_sanitization():
     """Verify failure modes return standard error structure and leak no sensitive info."""
     # 1. Empty message
     res_empty = client.post(
-        "/api/v1/cineku/chat",
-        headers={"X-API-Key": CINEKU_KEY},
-        json={"application": "cineku", "message": "   "},
+        "/api/v1/public/chat",
+        headers={"X-API-Key": PUBLIC_CHAT_KEY},
+        json={"application": "public-chat", "message": "   "},
     )
     assert res_empty.status_code == 400
     data = res_empty.json()
@@ -239,9 +245,9 @@ def test_e2e_error_handling_sanitization():
 
     # 2. Oversized payload > 4000 chars
     res_large = client.post(
-        "/api/v1/cineku/chat",
-        headers={"X-API-Key": CINEKU_KEY},
-        json={"application": "cineku", "message": "A" * 4005},
+        "/api/v1/public/chat",
+        headers={"X-API-Key": PUBLIC_CHAT_KEY},
+        json={"application": "public-chat", "message": "A" * 4005},
     )
     assert res_large.status_code == 400
     data = res_large.json()
@@ -249,9 +255,9 @@ def test_e2e_error_handling_sanitization():
 
     # 3. Invalid validation (missing required field)
     res_val = client.post(
-        "/api/v1/cineku/chat",
-        headers={"X-API-Key": CINEKU_KEY},
-        json={"application": "cineku"},
+        "/api/v1/public/chat",
+        headers={"X-API-Key": PUBLIC_CHAT_KEY},
+        json={"application": "public-chat"},
     )
     assert res_val.status_code == 422
     data = res_val.json()
@@ -272,7 +278,7 @@ def test_e2e_performance_metrics():
     tenants = [
         ("owl", "/api/v1/owl/chat", OWL_KEY, "Jelaskan modul OWL"),
         ("hr-corner", "/api/v1/hr-corner/chat", HR_KEY, "Jelaskan kebijakan HR"),
-        ("cineku", "/api/v1/cineku/chat", CINEKU_KEY, "Rekomendasi film populer"),
+        ("public-chat", "/api/v1/public/chat", PUBLIC_CHAT_KEY, "Jelaskan layanan umum"),
     ]
 
     metrics = {}

@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.config import settings
 
 client = TestClient(app)
 
@@ -8,7 +9,13 @@ client = TestClient(app)
 MASTER_KEY = "dev-shared-ai-key-change-in-production"
 OWL_KEY = "owl-secret-api-key"
 HR_KEY = "hr-corner-secret-api-key"
-CINEKU_KEY = "cineku-secret-api-key"
+PUBLIC_CHAT_KEY = "public-chat-secret-api-key"
+
+
+@pytest.fixture(autouse=True)
+def enable_auth(monkeypatch):
+    """Enable auth for security and tenant isolation tests."""
+    monkeypatch.setattr(settings, "AI_API_AUTH_ENABLED", True)
 
 
 def test_api_inventory_and_versioning_routes():
@@ -20,7 +27,8 @@ def test_api_inventory_and_versioning_routes():
     assert "/api/v1/chat" in paths
     assert "/api/v1/owl/chat" in paths
     assert "/api/v1/hr-corner/chat" in paths
-    assert "/api/v1/cineku/chat" in paths
+    assert "/api/v1/public/chat" in paths
+    assert "/api/v1/public/health" in paths
     assert "/api/v1/rag/documents/upload" in paths
     assert "/api/v1/knowledge/documents" in paths
     assert "/api/v1/recommendations" in paths
@@ -53,18 +61,18 @@ def test_authentication_invalid_api_key():
 def test_tenant_isolation_matrix():
     """Verify strict tenant isolation across all application cross-access attempts."""
 
-    # 1. Cineku Key -> OWL Endpoint (Forbidden)
-    res1 = client.post("/api/v1/owl/chat", headers={"X-API-Key": CINEKU_KEY}, json={"application": "owl", "message": "Test"})
+    # 1. Public Chat Key -> OWL Endpoint (Forbidden)
+    res1 = client.post("/api/v1/owl/chat", headers={"X-API-Key": PUBLIC_CHAT_KEY}, json={"application": "owl", "message": "Test"})
     assert res1.status_code == 403
     assert res1.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
 
-    # 2. Cineku Key -> HR Corner Endpoint (Forbidden)
-    res2 = client.post("/api/v1/hr-corner/chat", headers={"X-API-Key": CINEKU_KEY}, json={"application": "hr-corner", "message": "Test"})
+    # 2. Public Chat Key -> HR Corner Endpoint (Forbidden)
+    res2 = client.post("/api/v1/hr-corner/chat", headers={"X-API-Key": PUBLIC_CHAT_KEY}, json={"application": "hr-corner", "message": "Test"})
     assert res2.status_code == 403
     assert res2.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
 
-    # 3. OWL Key -> Cineku Endpoint (Forbidden)
-    res3 = client.post("/api/v1/cineku/chat", headers={"X-API-Key": OWL_KEY}, json={"application": "cineku", "message": "Test"})
+    # 3. OWL Key -> Public Chat Endpoint (Forbidden)
+    res3 = client.post("/api/v1/public/chat", headers={"X-API-Key": OWL_KEY}, json={"application": "public-chat", "message": "Test"})
     assert res3.status_code == 403
     assert res3.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
 
@@ -78,8 +86,8 @@ def test_tenant_isolation_matrix():
     assert res5.status_code == 403
     assert res5.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
 
-    # 6. HR Corner Key -> Cineku Endpoint (Forbidden)
-    res6 = client.post("/api/v1/cineku/chat", headers={"X-API-Key": HR_KEY}, json={"application": "cineku", "message": "Test"})
+    # 6. HR Corner Key -> Public Chat Endpoint (Forbidden)
+    res6 = client.post("/api/v1/public/chat", headers={"X-API-Key": HR_KEY}, json={"application": "public-chat", "message": "Test"})
     assert res6.status_code == 403
     assert res6.json()["error"]["code"] == "TENANT_ACCESS_DENIED"
 
@@ -89,11 +97,10 @@ def test_rate_limit_application_isolation_and_429():
     import time
     from app.core.rate_limit import rate_limiter
 
-    # Manually saturate rate limit bucket for 'owl' tenant
-    token_id = OWL_KEY[-8:]
-    bucket_key = f"owl:chat:{token_id}"
+    # Manually saturate rate limit bucket
     now = time.time()
-    rate_limiter._history[bucket_key] = [now] * 120
+    rate_limiter._history["chat:testclient"] = [now] * 120
+    rate_limiter._history["chat:127.0.0.1"] = [now] * 120
 
     # OWL request should trigger 429
     response_owl = client.post("/api/v1/owl/chat", headers={"X-API-Key": OWL_KEY}, json={"application": "owl", "message": "Halo"})
@@ -132,8 +139,8 @@ def test_openapi_specification():
     assert "/api/v1/chat" in spec["paths"]
 
 
-def test_backward_compatibility_owl_hr_cineku():
-    """Verify OWL, HR Corner, and Cineku dedicated chat endpoints respond properly with 200 OK."""
+def test_dedicated_tenant_endpoints_owl_hr_public():
+    """Verify OWL, HR Corner, and Public Chat dedicated chat endpoints respond properly with 200 OK."""
     # OWL Chat
     res_owl = client.post("/api/v1/owl/chat", headers={"X-API-Key": OWL_KEY}, json={"application": "owl", "message": "Apa itu OWL LMS?"})
     assert res_owl.status_code == 200
@@ -144,10 +151,10 @@ def test_backward_compatibility_owl_hr_cineku():
     assert res_hr.status_code == 200
     assert res_hr.json()["application"] == "hr-corner"
 
-    # Cineku Chat
-    res_cineku = client.post("/api/v1/cineku/chat", headers={"X-API-Key": CINEKU_KEY}, json={"application": "cineku", "message": "Rekomendasi film komedi terbaik."})
-    assert res_cineku.status_code == 200
-    assert res_cineku.json()["application"] == "cineku"
+    # Public Chat
+    res_public = client.post("/api/v1/public/chat", headers={"X-API-Key": PUBLIC_CHAT_KEY}, json={"application": "public-chat", "message": "Halo, bantuan apa yang tersedia?"})
+    assert res_public.status_code == 200
+    assert res_public.json()["application"] == "public-chat"
 
 
 def test_security_response_headers():

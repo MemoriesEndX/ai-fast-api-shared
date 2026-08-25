@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import RAGService
 from app.core.rate_limit import check_chat_rate_limit
+from app.core.security import verify_api_key, validate_tenant_auth
 
 router = APIRouter(tags=["Chat API"])
 
@@ -13,10 +14,13 @@ def get_rag_service() -> RAGService:
 @router.post("/chat", response_model=ChatResponse, summary="Public Unified AI Agent Chat completion")
 async def chat_endpoint(
     request: ChatRequest,
+    client_app: str = Depends(verify_api_key),
     _: None = Depends(check_chat_rate_limit),
     rag_service: RAGService = Depends(get_rag_service),
 ):
     """Multi-tenant Unified AI Agent Chat completion endpoint (Public API)."""
+    # 1. Tenant Authorization Check
+    validate_tenant_auth(client_app, request.application.value if hasattr(request.application, "value") else str(request.application))
     # 1. Input Validation Bounds
     if len(request.message.strip()) == 0:
         raise HTTPException(
