@@ -130,3 +130,45 @@ async def test_orchestrator_prompt_injection_blocked_in_general_chat():
     assert "Request Denied" in resp.answer
     assert resp.sources == []
     assert resp.tools_used == []
+
+
+def test_dynamic_max_tokens_policy():
+    """Phase 20.7: Verify dynamic max_tokens limits per intent and mode."""
+    from app.agent.orchestrator import calculate_dynamic_max_tokens
+
+    # 1. Greeting: 32-48 tokens
+    t_greeting = calculate_dynamic_max_tokens("Selamat malam", is_general_chat=True)
+    assert 32 <= t_greeting <= 48, f"Expected greeting tokens in 32-48, got {t_greeting}"
+
+    # 2. Casual / recipe: 64-96 tokens
+    t_casual = calculate_dynamic_max_tokens("Bisakah kamu menyarankan resep ayam sederhana?", is_general_chat=True)
+    assert 64 <= t_casual <= 96, f"Expected casual tokens in 64-96, got {t_casual}"
+
+    # 3. Normal general answer: 128 tokens
+    t_general = calculate_dynamic_max_tokens("Apa itu machine learning?", is_general_chat=True)
+    assert t_general == 128
+
+    # 4. Single tool LMS query: 128 tokens
+    t_lms_single = calculate_dynamic_max_tokens(
+        "Berapa progress belajar saya?",
+        intents=[AgentIntent.LMS_PROGRESS],
+        tool_count=1
+    )
+    assert t_lms_single == 128
+
+    # 5. Grounded knowledge query: 128-192 tokens
+    t_knowledge = calculate_dynamic_max_tokens(
+        "Apa aturan APD di dokumen Safety Policy?",
+        intents=[AgentIntent.PDF_KNOWLEDGE],
+        tool_count=1
+    )
+    assert 128 <= t_knowledge <= 192, f"Expected knowledge tokens in 128-192, got {t_knowledge}"
+
+    # 6. Complex multi-tool reasoning: 256 tokens
+    t_complex = calculate_dynamic_max_tokens(
+        "Analisis profile, progress, assessment saya dan berikan rekomendasi pembelajaran.",
+        intents=[AgentIntent.RECOMMENDATION, AgentIntent.LMS_PROGRESS, AgentIntent.LMS_ASSESSMENT],
+        tool_count=4
+    )
+    assert t_complex == 256
+

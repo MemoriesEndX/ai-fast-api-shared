@@ -1,4 +1,5 @@
 import sys
+import re
 import time
 import logging
 import asyncio
@@ -14,6 +15,58 @@ from app.services.qdrant_service import qdrant_service
 from app.services.embedding_service import embedding_service
 
 logger = logging.getLogger("ai_service.agent.orchestrator")
+
+
+def calculate_dynamic_max_tokens(
+    user_message: str,
+    intents: Optional[List[AgentIntent]] = None,
+    tool_count: int = 0,
+    is_general_chat: bool = False
+) -> int:
+    """
+    Determine dynamic max_tokens for LLM inference based on intent, mode, and query complexity.
+    Policy:
+    - GENERAL_CHAT greeting: 32–48 (48)
+    - GENERAL_CHAT casual: 64–96 (96)
+    - Normal general answer: 128
+    - Single tool LMS grounded answer: 128
+    - Grounded Knowledge (PDF/Video) & Recommendations (1-2 tools): 128–192 (192)
+    - Complex multi-tool reasoning (3+ tools): 256
+    """
+    msg_l = user_message.strip().lower()
+
+    if is_general_chat or (intents and AgentIntent.GENERAL_CHAT in intents and tool_count == 0):
+        greeting_patterns = [
+            r"^(halo|hai|hei|helo|hello|hi|hey)[\s\.,!\?]*$",
+            r"^selamat\s+(pagi|siang|sore|malam|datang|hari|sejahtera)[\s\.,!\?]*$",
+            r"^(apa\s+kabar|gimana\s+kabarnya|bagaimana\s+kabarmu|kabar\s+baik)[\s\.,!\?]*$",
+            r"^(terima\s+kasih|makasih|thanks|thank\s+you|syukron|matur\s+nuwun)[\s\.,!\?]*$",
+            r"^(siapa\s+kamu|kamu\s+siapa|siapa\s+namamu|siapakah\s+kamu|perkenalkan\s+dirimu)[\s\.,!\?]*$",
+            r"^(bisa\s+bantu\s+saya|bisa\s+tolong\s+saya|tolong\s+bantu\s+saya|bantu\s+saya)[\s\.,!\?]*$",
+            r"^good\s+(morning|afternoon|evening|night|day)[\s\.,!\?]*$",
+            r"^(how\s+are\s+you|who\s+are\s+you)[\s\.,!\?]*$",
+        ]
+        if any(re.search(p, msg_l) for p in greeting_patterns):
+            return 48
+
+        casual_keywords = [
+            "resep", "masak", "makan malam", "makan siang", "sarapan", "menu makan", "kuliner",
+            "cerita", "dongeng", "puisi", "lelucon", "joke", "cuaca", "arti mimpi"
+        ]
+        if any(k in msg_l for k in casual_keywords):
+            return 96
+
+        return 128
+
+    intents_list = intents or []
+    if tool_count >= 3:
+        return 256
+    elif AgentIntent.PDF_KNOWLEDGE in intents_list or AgentIntent.VIDEO_KNOWLEDGE in intents_list or AgentIntent.RECOMMENDATION in intents_list or tool_count == 2:
+        return 192
+    elif tool_count == 1:
+        return 128
+    else:
+        return 128
 
 
 class AgentOrchestrator:
@@ -220,11 +273,12 @@ class AgentOrchestrator:
                 messages.append({"role": h["role"], "content": h["content"]})
         messages.append({"role": "user", "content": user_message})
 
+        dynamic_max_tokens = calculate_dynamic_max_tokens(user_message, is_general_chat=True)
         try:
             qwen_response = await self.llm_service.generate_completion(
                 messages=messages,
                 temperature=0.3,
-                max_tokens=256
+                max_tokens=dynamic_max_tokens
             )
             if qwen_response and len(qwen_response.strip()) > 3:
                 return qwen_response.strip()
@@ -398,12 +452,18 @@ class AgentOrchestrator:
         if "pytest" in sys.modules:
             return self._generate_deterministic_fallback(user_message, tool_results, context_chunks, intents)
 
+        dynamic_max_tokens = calculate_dynamic_max_tokens(
+            user_message=user_message,
+            intents=intents,
+            tool_count=len(tool_results) if tool_results else 0,
+            is_general_chat=False
+        )
         try:
             if context_chunks or tool_results:
                 qwen_response = await self.llm_service.generate_completion(
                     messages=messages,
                     temperature=0.2,
-                    max_tokens=256
+                    max_tokens=dynamic_max_tokens
                 )
                 if qwen_response and len(qwen_response.strip()) > 5:
                     return qwen_response.strip()
