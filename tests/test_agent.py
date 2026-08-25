@@ -130,3 +130,23 @@ def test_agent_http_endpoint(client):
     assert "get_learning_progress" in data["tools_used"]
     assert "conversation_id" in data
     assert "sources" in data
+
+
+def test_router_keyword_substring_false_positive_prevention():
+    """Phase 20.7 Regression: 'profile' must not match 'file' keyword and enter PDF_KNOWLEDGE."""
+    from app.agent.router import intent_router, AgentIntent
+
+    # 1. Profile queries must route to LMS_PROFILE and NOT PDF_KNOWLEDGE
+    for q in ["profile", "user profile", "learning profile", "Tampilkan profile saya", "Siapa profile saya"]:
+        intents, tools = intent_router.classify_intent(q)
+        assert AgentIntent.PDF_KNOWLEDGE not in intents, f"Query '{q}' incorrectly routed to PDF_KNOWLEDGE"
+        assert "search_pdf_knowledge" not in tools, f"Query '{q}' incorrectly selected search_pdf_knowledge"
+        assert AgentIntent.LMS_PROFILE in intents, f"Query '{q}' should route to LMS_PROFILE"
+        assert "get_user_learning_profile" in tools
+
+    # 2. Legitimate file / PDF queries must still be detected
+    for q in ["PDF file safety", "upload file dokumen", "document file APD"]:
+        intents, tools = intent_router.classify_intent(q)
+        assert AgentIntent.PDF_KNOWLEDGE in intents, f"Query '{q}' failed to route to PDF_KNOWLEDGE"
+        assert "search_pdf_knowledge" in tools
+

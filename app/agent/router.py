@@ -21,6 +21,15 @@ class AgentIntent(str, Enum):
     GENERAL_CHAT = "GENERAL_CHAT"
 
 
+def _matches_any_keyword(text: str, keywords: List[str]) -> bool:
+    """Check if any keyword or phrase matches with word boundary in text to prevent substring false positives."""
+    for kw in keywords:
+        pattern = r'(?:\b|\A)' + re.escape(kw.strip().lower()) + r'(?:\b|\Z)'
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+    return False
+
+
 class IntentRouter:
     """Deterministic and pattern-assisted intent router for classifying user requests to appropriate tools."""
 
@@ -97,7 +106,11 @@ class IntentRouter:
                 tools.append("get_user_assessments")
 
         # 4. Profile Intent
-        if any(k in msg_lower for k in ["profil", "divisi saya", "jabatan saya", "posisi saya", "data diri saya"]) and "get_user_learning_profile" not in tools:
+        profile_keywords = [
+            "profil", "profile", "divisi saya", "jabatan saya", "posisi saya", "data diri saya",
+            "user profile", "learning profile"
+        ]
+        if _matches_any_keyword(msg_lower, profile_keywords) and "get_user_learning_profile" not in tools:
             intents.append(AgentIntent.LMS_PROFILE)
             tools.append("get_user_learning_profile")
 
@@ -113,8 +126,8 @@ class IntentRouter:
             "prosedur", "ijin kerja", "area terbatas", "confined space", "beban maksimal", "angkat manual", "near-miss",
             "pelaporan kecelakaan", "helm keselamatan", "materi safety", "safety", "k3"
         ]
-        if any(k in msg_lower for k in pdf_keywords) and not is_pure_greeting:
-            if AgentIntent.VIDEO_KNOWLEDGE not in intents or any(x in msg_lower for x in ["apd", "policy", "dokumen", "pdf", "sop"]):
+        if _matches_any_keyword(msg_lower, pdf_keywords) and not is_pure_greeting:
+            if AgentIntent.VIDEO_KNOWLEDGE not in intents or _matches_any_keyword(msg_lower, ["apd", "policy", "dokumen", "pdf", "sop"]):
                 intents.append(AgentIntent.PDF_KNOWLEDGE)
                 tools.append("search_pdf_knowledge")
 
