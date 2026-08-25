@@ -67,6 +67,25 @@ class IntentRouter:
             "cerita", "dongeng", "puisi", "lelucon", "joke", "cuaca", "arti mimpi"
         ])
 
+        # Check specific domain intent indicators
+        has_progress_kw = any(k in msg_lower for k in [
+            "progress", "kemajuan", "sudah belajar", "progres", "sudah selesai", "selesaikan",
+            "sedang saya ikuti", "sedang dipelajari", "status pembelajaran", "status belajar"
+        ])
+        has_assessment_kw = (any(k in msg_lower for k in ["nilai", "assessment", "skor", "ujian", "evaluasi", "tes"]) and not is_general_casual)
+        has_profile_kw = _matches_any_keyword(msg_lower, [
+            "profil", "profile", "divisi saya", "jabatan saya", "posisi saya", "data diri saya",
+            "user profile", "learning profile"
+        ])
+
+        # Check if comprehensive multi-tool analysis is explicitly requested
+        is_multi_analysis = (
+            ("analisis" in msg_lower or "evaluasi" in msg_lower or "tampilkan semua" in msg_lower or "lengkap" in msg_lower or "semua" in msg_lower)
+            and sum([has_progress_kw, has_assessment_kw, has_profile_kw]) >= 2
+        ) or (
+            has_progress_kw and has_assessment_kw and has_profile_kw
+        )
+
         # 1. Recommendation Intent (Learning / LMS Course / Module specific)
         learning_rec_keywords = [
             "pembelajaran yang cocok", "pembelajaran apa yang cocok", "rekomendasi pembelajaran",
@@ -77,40 +96,50 @@ class IntentRouter:
             "rekomendasikan pelatihan", "rekomendasi learning", "rekomendasikan learning"
         ]
 
-        if any(k in msg_lower for k in learning_rec_keywords) or (
+        is_rec_intent = any(k in msg_lower for k in learning_rec_keywords) or (
             any(k in msg_lower for k in ["cocok", "rekomendasi", "rekomendasikan", "disarankan", "sebaiknya saya ambil"])
             and not is_general_casual
             and any(k in msg_lower for k in ["belajar", "modul", "kursus", "materi", "pelatihan", "training", "course", "lms", "saya", "pembelajaran"])
-        ):
+        )
+
+        if is_rec_intent:
             intents.append(AgentIntent.RECOMMENDATION)
-            tools.extend([
-                "get_user_learning_profile",
-                "get_learning_progress",
-                "get_user_assessments",
-                "get_learning_recommendations"
-            ])
+            tools.append("get_learning_recommendations")
+            if is_multi_analysis:
+                # Add full multi-tool set when comprehensive cross-analysis is explicitly requested
+                if has_profile_kw or "analisis" in msg_lower:
+                    intents.append(AgentIntent.LMS_PROFILE)
+                    tools.append("get_user_learning_profile")
+                if has_progress_kw or "analisis" in msg_lower:
+                    intents.append(AgentIntent.LMS_PROGRESS)
+                    tools.append("get_learning_progress")
+                if has_assessment_kw or "analisis" in msg_lower:
+                    intents.append(AgentIntent.LMS_ASSESSMENT)
+                    tools.append("get_user_assessments")
+            else:
+                # Minimum sufficient tools for combined intents
+                if has_progress_kw:
+                    intents.append(AgentIntent.LMS_PROGRESS)
+                    tools.append("get_learning_progress")
+                if has_assessment_kw:
+                    intents.append(AgentIntent.LMS_ASSESSMENT)
+                    tools.append("get_user_assessments")
+                if has_profile_kw:
+                    intents.append(AgentIntent.LMS_PROFILE)
+                    tools.append("get_user_learning_profile")
 
         # 2. LMS Progress Intent
-        if any(k in msg_lower for k in [
-            "progress", "kemajuan", "sudah belajar", "progres", "sudah selesai", "selesaikan",
-            "sedang saya ikuti", "sedang dipelajari", "status pembelajaran", "status belajar"
-        ]):
-            if AgentIntent.RECOMMENDATION not in intents:
-                intents.append(AgentIntent.LMS_PROGRESS)
-                tools.append("get_learning_progress")
+        if has_progress_kw and "get_learning_progress" not in tools:
+            intents.append(AgentIntent.LMS_PROGRESS)
+            tools.append("get_learning_progress")
 
         # 3. Assessment / Exam Intent
-        if any(k in msg_lower for k in ["nilai", "assessment", "skor", "ujian", "evaluasi", "tes"]) and not is_general_casual:
-            if AgentIntent.RECOMMENDATION not in intents:
-                intents.append(AgentIntent.LMS_ASSESSMENT)
-                tools.append("get_user_assessments")
+        if has_assessment_kw and "get_user_assessments" not in tools:
+            intents.append(AgentIntent.LMS_ASSESSMENT)
+            tools.append("get_user_assessments")
 
         # 4. Profile Intent
-        profile_keywords = [
-            "profil", "profile", "divisi saya", "jabatan saya", "posisi saya", "data diri saya",
-            "user profile", "learning profile"
-        ]
-        if _matches_any_keyword(msg_lower, profile_keywords) and "get_user_learning_profile" not in tools:
+        if has_profile_kw and "get_user_learning_profile" not in tools:
             intents.append(AgentIntent.LMS_PROFILE)
             tools.append("get_user_learning_profile")
 

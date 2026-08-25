@@ -250,4 +250,45 @@ async def test_parallel_mcp_execution_concurrency():
     assert len(resp.sources) > 0
 
 
+def test_minimum_sufficient_tool_selection_matrix():
+    """Phase 20.7: Verify minimum sufficient tool selection matrix across various query intents."""
+    from app.agent.router import intent_router, AgentIntent
+
+    # 1. Progress only
+    intents1, tools1 = intent_router.classify_intent("Berapa progress belajar saya?")
+    assert tools1 == ["get_learning_progress"]
+    assert AgentIntent.LMS_PROGRESS in intents1
+
+    # 2. Assessment only
+    intents2, tools2 = intent_router.classify_intent("Apa hasil assessment saya?")
+    assert tools2 == ["get_user_assessments"]
+    assert AgentIntent.LMS_ASSESSMENT in intents2
+
+    # 3. Profile only
+    intents3, tools3 = intent_router.classify_intent("Siapa profile saya?")
+    assert tools3 == ["get_user_learning_profile"]
+    assert AgentIntent.LMS_PROFILE in intents3
+
+    # 4. Pure recommendation (no auxiliary request)
+    intents4, tools4 = intent_router.classify_intent("Berikan rekomendasi pembelajaran.")
+    assert tools4 == ["get_learning_recommendations"]
+    assert AgentIntent.RECOMMENDATION in intents4
+
+    # 5. Combined: progress + recommendation
+    intents5, tools5 = intent_router.classify_intent("Analisis progress dan rekomendasikan pembelajaran.")
+    assert set(tools5) == {"get_learning_progress", "get_learning_recommendations"}
+    assert len(tools5) == 2
+
+    # 6. Multi-tool: profile, progress, assessment and recommendation
+    intents6, tools6 = intent_router.classify_intent("Analisis profile, progress, assessment saya dan berikan rekomendasi pembelajaran.")
+    assert set(tools6) == {
+        "get_learning_recommendations",
+        "get_user_learning_profile",
+        "get_learning_progress",
+        "get_user_assessments"
+    }
+    assert len(tools6) == 4
+
+
+
 
