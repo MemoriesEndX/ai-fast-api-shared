@@ -69,6 +69,108 @@ def calculate_dynamic_max_tokens(
         return 128
 
 
+def format_compact_mcp_context(tool_results: List[Dict[str, Any]]) -> str:
+    """
+    Format MCP tool results into a compact, human-readable structured context for LLM grounding.
+    Removes JSON boilerplate, internal IDs, request metadata, and debugging fields.
+    """
+    sections = []
+    for item in tool_results:
+        tool_name = item.get("tool", "")
+        res = item.get("result", {})
+        if not isinstance(res, dict):
+            sections.append(f"{tool_name.upper()}:\n{str(res)[:300]}")
+            continue
+
+        if tool_name == "get_user_learning_profile":
+            div = res.get("division", "N/A")
+            pos = res.get("position", "N/A")
+            role = res.get("role", pos)
+            interests = res.get("interests", [])
+            sec = f"PROFILE:\nRole: {role}\nDivision: {div}"
+            if interests:
+                sec += f"\nInterests: {', '.join(interests) if isinstance(interests, list) else interests}"
+            sections.append(sec)
+
+        elif tool_name == "get_learning_progress":
+            items = res.get("items", [])
+            completed = [i.get("title", f"Content #{i.get('content_id')}") for i in items if i.get("status") == "completed"]
+            in_prog = [i.get("title", f"Content #{i.get('content_id')}") for i in items if i.get("status") == "in_progress"]
+            sec_lines = ["PROGRESS:"]
+            sec_lines.append(f"Completed: {', '.join(completed) if completed else 'None'}")
+            sec_lines.append(f"In Progress: {', '.join(in_prog) if in_prog else 'None'}")
+            if "summary" in res and isinstance(res["summary"], dict):
+                s = res["summary"]
+                sec_lines.append(f"Summary: Total {s.get('total', len(items))}, Completed {s.get('completed', len(completed))}, In Progress {s.get('in_progress', len(in_prog))}")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name == "get_user_assessments":
+            items = res.get("items", [])
+            sec_lines = ["ASSESSMENTS:"]
+            if not items:
+                sec_lines.append("No assessments recorded.")
+            else:
+                for a in items:
+                    title = a.get("title") or f"Assessment #{a.get('assessment_id', '')}"
+                    score = a.get("score", "N/A")
+                    status = a.get("status", "N/A")
+                    sec_lines.append(f"- {title}: Score {score} ({status})")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name == "get_learning_recommendations":
+            recs = res.get("recommendations", [])
+            sec_lines = ["RECOMMENDATIONS:"]
+            if not recs:
+                sec_lines.append("No recommendations available.")
+            else:
+                for idx, r in enumerate(recs, 1):
+                    title = r.get("title", f"Course #{r.get('content_id')}")
+                    cat = r.get("category") or r.get("division") or ""
+                    cat_str = f" [{cat}]" if cat else ""
+                    sec_lines.append(f"{idx}. {title}{cat_str}")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name == "search_pdf_knowledge":
+            results = res.get("results", [])
+            sec_lines = ["PDF KNOWLEDGE:"]
+            for r in results:
+                fname = r.get("filename") or r.get("title") or "Document"
+                text = (r.get("text") or "").strip()
+                if text:
+                    sec_lines.append(f"- [{fname}]: {text}")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name == "search_video_transcript":
+            results = res.get("results", [])
+            sec_lines = ["VIDEO TRANSCRIPT:"]
+            for r in results:
+                title = r.get("title") or "Video"
+                st = r.get("start_time", "00:00")
+                et = r.get("end_time", "00:00")
+                text = (r.get("text") or "").strip()
+                if text:
+                    sec_lines.append(f"- [{title} ({st}-{et})]: {text}")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name in ["search_learning_content", "search_learning_playlist"]:
+            items = res.get("items") or res.get("results") or []
+            sec_lines = [f"{tool_name.upper().replace('_', ' ')}:"]
+            for r in items:
+                title = r.get("title") or f"Item #{r.get('id')}"
+                sec_lines.append(f"- {title}")
+            sections.append("\n".join(sec_lines))
+
+        elif tool_name in ["get_content_detail", "get_playlist_detail"]:
+            title = res.get("title") or "Detail"
+            desc = res.get("description") or ""
+            sections.append(f"DETAIL:\nTitle: {title}\nDescription: {desc}")
+
+        else:
+            sections.append(f"{tool_name.upper()}:\n{str(res)[:300]}")
+
+    return "\n\n".join(sections)
+
+
 class AgentOrchestrator:
     """
     Unified AI Agent Orchestrator.
@@ -405,8 +507,10 @@ class AgentOrchestrator:
             for c in context_chunks:
                 context_str += f"- [{c.get('filename') or c.get('title')}]: {c.get('text')}\n"
 
-        for item in tool_results:
-            context_str += f"\n--- Tool '{item['tool']}' Output ---\n{str(item['result'])}\n"
+        if tool_results:
+            compact_tools = format_compact_mcp_context(tool_results)
+            if compact_tools:
+                context_str += f"\n--- Grounded Tool Context ---\n{compact_tools}\n"
 
         if len(context_str) > settings.RAG_MAX_CONTEXT_CHARS:
             context_str = context_str[:settings.RAG_MAX_CONTEXT_CHARS] + "... (truncated)"

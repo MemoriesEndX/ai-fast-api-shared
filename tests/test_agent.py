@@ -150,3 +150,81 @@ def test_router_keyword_substring_false_positive_prevention():
         assert AgentIntent.PDF_KNOWLEDGE in intents, f"Query '{q}' failed to route to PDF_KNOWLEDGE"
         assert "search_pdf_knowledge" in tools
 
+
+def test_compact_mcp_context_formatting_and_token_reduction():
+    """Phase 20.7: Verify compact MCP context formatting strips boilerplate and reduces context tokens."""
+    from app.agent.orchestrator import format_compact_mcp_context
+
+    raw_results = [
+        {
+            "tool": "get_user_learning_profile",
+            "result": {
+                "status": "success",
+                "request_id": "req-12345-debug",
+                "execution_time_ms": 14.2,
+                "user_id": 123,
+                "division": "IT",
+                "position": "Senior Developer",
+                "role": "Senior Developer",
+                "interests": ["Python", "Docker", "Security"],
+                "raw_db_rows": [{"id": 1, "col": "val"}]
+            }
+        },
+        {
+            "tool": "get_learning_progress",
+            "result": {
+                "status": "success",
+                "user_id": 123,
+                "items": [
+                    {"content_id": 1, "title": "Safety Induction", "status": "completed", "pct": 100, "updated_at": "2026-01-01"},
+                    {"content_id": 2, "title": "Laravel Advanced", "status": "in_progress", "pct": 50, "updated_at": "2026-01-02"}
+                ],
+                "summary": {"total": 2, "completed": 1, "in_progress": 1}
+            }
+        },
+        {
+            "tool": "get_user_assessments",
+            "result": {
+                "status": "success",
+                "items": [
+                    {"assessment_id": 101, "title": "K3 Assessment", "score": 88, "status": "passed"}
+                ]
+            }
+        },
+        {
+            "tool": "get_learning_recommendations",
+            "result": {
+                "status": "success",
+                "recommendations": [
+                    {"content_id": 201, "title": "API Security Best Practices", "category": "IT", "final_score": 0.95},
+                    {"content_id": 202, "title": "Docker Microservices", "category": "DevOps", "final_score": 0.89}
+                ]
+            }
+        }
+    ]
+
+    compact_text = format_compact_mcp_context(raw_results)
+    raw_text = "\n".join(str(r["result"]) for r in raw_results)
+
+    # 1. Structure assertions
+    assert "PROFILE:" in compact_text
+    assert "Role: Senior Developer" in compact_text
+    assert "Division: IT" in compact_text
+    assert "PROGRESS:" in compact_text
+    assert "Completed: Safety Induction" in compact_text
+    assert "In Progress: Laravel Advanced" in compact_text
+    assert "ASSESSMENTS:" in compact_text
+    assert "K3 Assessment: Score 88 (passed)" in compact_text
+    assert "RECOMMENDATIONS:" in compact_text
+    assert "1. API Security Best Practices [IT]" in compact_text
+    assert "2. Docker Microservices [DevOps]" in compact_text
+
+    # 2. Boilerplate removal assertions
+    assert "req-12345-debug" not in compact_text
+    assert "raw_db_rows" not in compact_text
+    assert "execution_time_ms" not in compact_text
+
+    # 3. Compactness assertion (>40% character reduction vs raw JSON)
+    assert len(compact_text) < len(raw_text) * 0.7
+
+
