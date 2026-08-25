@@ -249,9 +249,13 @@ class AgentOrchestrator:
         seen_tool_calls: set = set()
         max_calls = min(settings.CHAT_MAX_TOOL_CALLS, 5)
 
+        # Prepare valid tool invocation tasks
+        tool_tasks = []
+        prepared_calls = []
+
         for tool_name in candidate_tools:
-            if len(tools_executed) >= max_calls:
-                logger.warning(f"Reached MAX_TOOL_CALLS limit ({max_calls}). Stopping tool loop.")
+            if len(prepared_calls) >= max_calls:
+                logger.warning(f"Reached MAX_TOOL_CALLS limit ({max_calls}). Stopping tool selection.")
                 break
 
             # Tenant isolation enforcement: non-OWL applications (hr-corner, cineku) cannot execute OWL LMS tools
@@ -283,9 +287,16 @@ class AgentOrchestrator:
                 continue
             seen_tool_calls.add(call_signature)
 
-            try:
-                res = await mcp_server.execute_tool(tool_name, args, auth_context=auth_context)
-                if isinstance(res, dict) and "error" in res:
+            prepared_calls.append((tool_name, args))
+            tool_tasks.append(mcp_server.execute_tool(tool_name, args, auth_context=auth_context))
+
+        # Parallel MCP execution with asyncio.gather for independent tool calls
+        if tool_tasks:
+            raw_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+            for (tool_name, args), res in zip(prepared_calls, raw_results):
+                if isinstance(res, Exception):
+                    logger.error(f"Error executing tool '{tool_name}' in Agent orchestrator: {res}")
+                elif isinstance(res, dict) and "error" in res:
                     logger.warning(f"MCP Tool '{tool_name}' returned error: {res['error']}")
                 else:
                     tools_executed.append(tool_name)
@@ -294,8 +305,6 @@ class AgentOrchestrator:
                         "args": args,
                         "result": res
                     })
-            except Exception as exc:
-                logger.error(f"Error executing tool '{tool_name}' in Agent orchestrator: {exc}")
 
         # Qdrant RAG fallback search ONLY IF a knowledge intent was classified and no tools were run
         context_chunks: List[Dict[str, Any]] = []

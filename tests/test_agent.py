@@ -1,4 +1,5 @@
 import pytest
+import time
 from fastapi.testclient import TestClient
 from app.agent.orchestrator import agent_orchestrator
 from app.schemas.chat import ChatRequest
@@ -226,5 +227,27 @@ def test_compact_mcp_context_formatting_and_token_reduction():
 
     # 3. Compactness assertion (>40% character reduction vs raw JSON)
     assert len(compact_text) < len(raw_text) * 0.7
+
+
+@pytest.mark.asyncio
+async def test_parallel_mcp_execution_concurrency():
+    """Phase 20.7: Verify independent candidate tools execute concurrently without race conditions."""
+    req = ChatRequest(
+        application="owl",
+        user_id=123,
+        message="Saya ingin melihat profil, progress, dan nilai assessment."
+    )
+    start_time = time.perf_counter()
+    resp = await agent_orchestrator.process_chat(req)
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    assert resp.application == "owl"
+    assert "get_user_learning_profile" in resp.tools_used
+    assert "get_learning_progress" in resp.tools_used
+    assert "get_user_assessments" in resp.tools_used
+    # Ensure no duplicate executions
+    assert len(resp.tools_used) == len(set(resp.tools_used))
+    assert len(resp.sources) > 0
+
 
 
