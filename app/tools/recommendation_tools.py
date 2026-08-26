@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Any, Optional
 from app.mcp.registry import register_tool
@@ -27,12 +28,14 @@ async def get_learning_recommendations(user_id: int, limit: int = 5, auth_contex
     uid = auth_context.user_id if auth_context else user_id
     safe_limit = min(max(1, limit), 20)
 
-    # 1. Fetch user data from LMS Client
-    profile_raw = await lms_client.get_user_profile(uid)
-    progress_raw = await lms_client.get_learning_progress(uid)
-    assessments_raw = await lms_client.get_user_assessments(uid)
-    content_catalog = await lms_client.search_content(query="", limit=20)
-    playlist_catalog = await lms_client.search_playlist(query="", limit=10)
+    # 1. Fetch user and catalog data in parallel from LMS Client
+    profile_raw, progress_raw, assessments_raw, content_catalog, playlist_catalog = await asyncio.gather(
+        lms_client.get_user_profile(uid),
+        lms_client.get_learning_progress(uid),
+        lms_client.get_user_assessments(uid),
+        lms_client.search_content(query="", limit=20),
+        lms_client.search_playlist(query="", limit=10),
+    )
 
     # 2. Extract completed items
     progress_items = progress_raw.get("items", [])

@@ -56,6 +56,10 @@ class ChatResponse(BaseModel):
         None,
         description="Total processing latency in milliseconds"
     )
+    telemetry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Detailed latency and resource telemetry breakdown across pipeline stages"
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if not self.answer and self.message:
