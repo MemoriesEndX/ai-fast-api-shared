@@ -42,6 +42,26 @@ class BaseLLMService(ABC):
         """Generate chat completion from LLM backend."""
         pass
 
+    async def generate_completion_detailed(
+        self,
+        prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 256,
+    ) -> Tuple[Optional[str], Dict[str, Any]]:
+        """Generate chat completion with fine-grained execution telemetry."""
+        res = await self.generate_completion(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return res, {}
+
 
 class LlamaCppLLMService(BaseLLMService):
     """LLM Service implementation communicating with llama-server via OpenAI-compatible REST API."""
@@ -59,6 +79,15 @@ class LlamaCppLLMService(BaseLLMService):
         self.provider_name = provider_name
         self.timeout = timeout
         self.prompt_service = prompt_service or PromptService()
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or initialize persistent HTTP client with connection pooling."""
+        if self._client is None or self._client.is_closed:
+            timeout_config = httpx.Timeout(self.timeout, connect=0.5)
+            limits = httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
+            self._client = httpx.AsyncClient(timeout=timeout_config, limits=limits)
+        return self._client
 
     async def generate_response(self, request: ChatRequest) -> ChatResponse:
         app_name = str(request.application.value if hasattr(request.application, 'value') else request.application)
@@ -80,39 +109,37 @@ class LlamaCppLLMService(BaseLLMService):
         metrics_registry.inc("llm_requests_total", labels={"model": self.model_name, "provider": self.provider_name})
 
         try:
-            # Short 1.5s connect timeout for fast offline detection
-            request_timeout = httpx.Timeout(self.timeout, connect=1.5)
-            async with httpx.AsyncClient(timeout=request_timeout) as client:
-                response = await client.post(endpoint, json=payload)
-                duration = time.time() - start_time
-                metrics_registry.observe("llm_latency_seconds", duration, labels={"model": self.model_name})
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    usage = data.get("usage", {})
-                    if usage and isinstance(usage, dict):
-                        total_tokens = usage.get("total_tokens", 0)
-                        if total_tokens > 0:
-                            metrics_registry.inc("llm_tokens_total", value=float(total_tokens), labels={"model": self.model_name})
+            client = self._get_client()
+            response = await client.post(endpoint, json=payload)
+            duration = time.time() - start_time
+            metrics_registry.observe("llm_latency_seconds", duration, labels={"model": self.model_name})
+            
+            if response.status_code == 200:
+                data = response.json()
+                usage = data.get("usage", {})
+                if usage and isinstance(usage, dict):
+                    total_tokens = usage.get("total_tokens", 0)
+                    if total_tokens > 0:
+                        metrics_registry.inc("llm_tokens_total", value=float(total_tokens), labels={"model": self.model_name})
 
-                    choices = data.get("choices", [])
-                    if choices and len(choices) > 0:
-                        content = choices[0].get("message", {}).get("content", "")
-                        return ChatResponse(
-                            application=app_name,
-                            model=self.model_name,
-                            message=content.strip(),
-                            provider=self.provider_name,
-                        )
-                
-                logger.error(f"llama-server error: HTTP {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail={
-                        "code": "LLM_ERROR",
-                        "message": "LLM inference server returned an error response."
-                    }
-                )
+                choices = data.get("choices", [])
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content", "")
+                    return ChatResponse(
+                        application=app_name,
+                        model=self.model_name,
+                        message=content.strip(),
+                        provider=self.provider_name,
+                    )
+            
+            logger.error(f"llama-server error: HTTP {response.status_code} - {response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "code": "LLM_ERROR",
+                    "message": "LLM inference server returned an error response."
+                }
+            )
 
         except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as exc:
             duration = time.time() - start_time
@@ -147,21 +174,20 @@ class LlamaCppLLMService(BaseLLMService):
         }
         endpoint = f"{self.base_url}/v1/chat/completions"
         try:
-            request_timeout = httpx.Timeout(self.timeout, connect=1.5)
-            async with httpx.AsyncClient(timeout=request_timeout) as client:
-                response = await client.post(endpoint, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    choices = data.get("choices", [])
-                    if choices and len(choices) > 0:
-                        content = choices[0].get("message", {}).get("content", "")
-                        if content and content.strip():
-                            return content.strip()
+            client = self._get_client()
+            response = await client.post(endpoint, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                choices = data.get("choices", [])
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content and content.strip():
+                        return content.strip()
         except Exception as exc:
             logger.warning(f"Failed to generate LLM explanation: {exc}")
         return None
 
-    async def generate_completion(
+    async def generate_completion_detailed(
         self,
         prompt: Optional[str] = None,
         system_prompt: Optional[str] = None,
@@ -169,8 +195,8 @@ class LlamaCppLLMService(BaseLLMService):
         messages: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.3,
         max_tokens: int = 256,
-    ) -> Optional[str]:
-        """Generate chat completion from LLM backend."""
+    ) -> Tuple[Optional[str], Dict[str, Any]]:
+        """Generate chat completion from LLM backend with detailed telemetry metrics."""
         final_messages = []
         if messages:
             final_messages = list(messages)
@@ -183,7 +209,7 @@ class LlamaCppLLMService(BaseLLMService):
                 final_messages.append({"role": "user", "content": prompt})
 
         if not final_messages:
-            return None
+            return None, {}
 
         payload = {
             "model": self.model_name,
@@ -192,34 +218,73 @@ class LlamaCppLLMService(BaseLLMService):
             "max_tokens": max_tokens,
         }
         endpoint = f"{self.base_url}/v1/chat/completions"
+        t0 = time.perf_counter()
+        telemetry: Dict[str, Any] = {"max_tokens": max_tokens}
+
         try:
-            request_timeout = httpx.Timeout(self.timeout, connect=2.0)
-            async with httpx.AsyncClient(timeout=request_timeout) as client:
-                response = await client.post(endpoint, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    choices = data.get("choices", [])
-                    if choices and len(choices) > 0:
-                        content = choices[0].get("message", {}).get("content", "")
-                        if content and content.strip():
-                            return content.strip()
-                logger.warning(f"llama-server returned HTTP {response.status_code}: {response.text[:200]}")
+            client = self._get_client()
+            response = await client.post(endpoint, json=payload)
+            llm_duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+            telemetry["llm_latency_ms"] = llm_duration_ms
+
+            if response.status_code == 200:
+                data = response.json()
+                usage = data.get("usage", {})
+                if usage and isinstance(usage, dict):
+                    telemetry["prompt_tokens"] = usage.get("prompt_tokens", 0)
+                    telemetry["completion_tokens"] = usage.get("completion_tokens", 0)
+                    telemetry["total_tokens"] = usage.get("total_tokens", 0)
+
+                timings = data.get("timings", {})
+                if timings and isinstance(timings, dict):
+                    telemetry["prompt_eval_ms"] = round(timings.get("prompt_eval_duration_ms", 0), 2)
+                    telemetry["generation_ms"] = round(timings.get("predicted_duration_ms", 0), 2)
+
+                choices = data.get("choices", [])
+                if choices and len(choices) > 0:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content and content.strip():
+                        return content.strip(), telemetry
+            logger.warning(f"llama-server returned HTTP {response.status_code}: {response.text[:200]}")
         except Exception as exc:
+            telemetry["llm_latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+            telemetry["error"] = str(exc)
             logger.warning(f"Failed to generate LLM completion: {exc}")
-        return None
+
+        return None, telemetry
+
+    async def generate_completion(
+        self,
+        prompt: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 256,
+    ) -> Optional[str]:
+        """Generate chat completion from LLM backend."""
+        content, _ = await self.generate_completion_detailed(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return content
 
     async def check_health(self) -> Dict[str, Any]:
         """Ping llama-server health endpoint to verify model readiness."""
         health_endpoint = f"{self.base_url}/health"
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0, connect=1.0)) as client:
-                res = await client.get(health_endpoint)
-                if res.status_code == 200:
-                    return {
-                        "status": "ok",
-                        "provider": self.provider_name,
-                        "model": self.model_name,
-                    }
+            client = self._get_client()
+            res = await client.get(health_endpoint)
+            if res.status_code == 200:
+                return {
+                    "status": "ok",
+                    "provider": self.provider_name,
+                    "model": self.model_name,
+                }
         except Exception as e:
             logger.debug(f"llama-server health check failed: {e}")
 

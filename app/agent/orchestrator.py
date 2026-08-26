@@ -208,8 +208,10 @@ class AgentOrchestrator:
         auth_context = UserAuthContext(user_id=user_id, application=app_name)
 
         # 1. Intent Routing & Tool Selection
+        t_route_0 = time.perf_counter()
         intents, candidate_tools = intent_router.classify_intent(request.message, request.document_id)
-        logger.info(f"Classified intents for '{request.message[:40]}...': {[i.value for i in intents]} | Candidates: {candidate_tools}")
+        router_ms = round((time.perf_counter() - t_route_0) * 1000, 2)
+        logger.info(f"Classified intents for '{request.message[:40]}...': {[i.value for i in intents]} | Candidates: {candidate_tools} ({router_ms} ms)")
 
         # Extract Tenant-isolated Conversation History
         history = conversation_manager.get_history(conversation_id, application=app_name)
@@ -219,7 +221,7 @@ class AgentOrchestrator:
         # =========================================================================
         if AgentIntent.GENERAL_CHAT in intents and not candidate_tools:
             logger.info(f"Executing GENERAL_CHAT mode for application '{app_name}'.")
-            final_answer = await self._generate_general_chat_answer(
+            final_answer, llm_telemetry = await self._generate_general_chat_answer(
                 user_message=request.message,
                 history=history,
                 app_name=app_name,
@@ -228,6 +230,21 @@ class AgentOrchestrator:
             # Record Turn in Conversation Context (Tenant Isolated)
             conversation_manager.add_turn(conversation_id, request.message, final_answer, application=app_name)
             latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+            telemetry = {
+                "request_total_ms": latency_ms,
+                "router_ms": router_ms,
+                "mcp_total_ms": 0.0,
+                "mcp_breakdown_ms": {},
+                "qdrant_ms": 0.0,
+                "prompt_build_ms": llm_telemetry.get("prompt_build_ms", 0.0),
+                "llm_total_ms": llm_telemetry.get("llm_latency_ms", 0.0),
+                "llm_prompt_eval_ms": llm_telemetry.get("prompt_eval_ms", 0.0),
+                "llm_generation_ms": llm_telemetry.get("generation_ms", 0.0),
+                "prompt_tokens": llm_telemetry.get("prompt_tokens", 0),
+                "output_tokens": llm_telemetry.get("completion_tokens", 0),
+                "tools_count": 0,
+            }
 
             return ChatResponse(
                 application=app_name,
@@ -239,6 +256,7 @@ class AgentOrchestrator:
                 conversation_id=conversation_id,
                 tools_used=[],
                 latency_ms=latency_ms,
+                telemetry=telemetry,
             )
 
         # =========================================================================
@@ -248,6 +266,7 @@ class AgentOrchestrator:
         tools_executed: List[str] = []
         seen_tool_calls: set = set()
         max_calls = min(settings.CHAT_MAX_TOOL_CALLS, 5)
+        mcp_breakdown: Dict[str, float] = {}
 
         # Prepare valid tool invocation tasks
         tool_tasks = []
@@ -291,6 +310,7 @@ class AgentOrchestrator:
             tool_tasks.append(mcp_server.execute_tool(tool_name, args, auth_context=auth_context))
 
         # Parallel MCP execution with asyncio.gather for independent tool calls
+        t_mcp_0 = time.perf_counter()
         if tool_tasks:
             raw_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
             for (tool_name, args), res in zip(prepared_calls, raw_results):
@@ -305,11 +325,14 @@ class AgentOrchestrator:
                         "args": args,
                         "result": res
                     })
+        mcp_total_ms = round((time.perf_counter() - t_mcp_0) * 1000, 2) if tool_tasks else 0.0
 
         # Qdrant RAG fallback search ONLY IF a knowledge intent was classified and no tools were run
         context_chunks: List[Dict[str, Any]] = []
+        qdrant_ms = 0.0
         is_knowledge_intent = any(i in intents for i in [AgentIntent.PDF_KNOWLEDGE, AgentIntent.VIDEO_KNOWLEDGE])
         if not tools_executed and is_knowledge_intent:
+            t_qdrant_0 = time.perf_counter()
             try:
                 query_vector = embedding_service.embed_text(request.message)
                 context_chunks = await qdrant_service.search_similar(
@@ -321,12 +344,13 @@ class AgentOrchestrator:
                 )
             except Exception as e:
                 logger.error(f"Error during RAG fallback search: {e}")
+            qdrant_ms = round((time.perf_counter() - t_qdrant_0) * 1000, 2)
 
         # Extract Citations & Standardized Sources
         sources = self._extract_sources(tool_results, context_chunks)
 
         # Synthesize Grounded Answer with Qwen LLM
-        final_answer = await self._synthesize_answer(
+        final_answer, llm_telemetry = await self._synthesize_answer(
             user_message=request.message,
             tool_results=tool_results,
             context_chunks=context_chunks,
@@ -340,6 +364,21 @@ class AgentOrchestrator:
 
         latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
+        telemetry = {
+            "request_total_ms": latency_ms,
+            "router_ms": router_ms,
+            "mcp_total_ms": mcp_total_ms,
+            "mcp_breakdown_ms": mcp_breakdown,
+            "qdrant_ms": qdrant_ms,
+            "prompt_build_ms": llm_telemetry.get("prompt_build_ms", 0.0),
+            "llm_total_ms": llm_telemetry.get("llm_latency_ms", 0.0),
+            "llm_prompt_eval_ms": llm_telemetry.get("prompt_eval_ms", 0.0),
+            "llm_generation_ms": llm_telemetry.get("generation_ms", 0.0),
+            "prompt_tokens": llm_telemetry.get("prompt_tokens", 0),
+            "output_tokens": llm_telemetry.get("completion_tokens", 0),
+            "tools_count": len(tools_executed),
+        }
+
         return ChatResponse(
             application=app_name,
             message=final_answer,
@@ -350,6 +389,7 @@ class AgentOrchestrator:
             conversation_id=conversation_id,
             tools_used=tools_executed,
             latency_ms=latency_ms,
+            telemetry=telemetry,
         )
 
     async def _generate_general_chat_answer(
@@ -357,8 +397,9 @@ class AgentOrchestrator:
         user_message: str,
         history: List[Dict[str, str]],
         app_name: str = "owl"
-    ) -> str:
-        """Generate a natural, conversational response for greetings, casual questions, and small talk."""
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Generate a natural, conversational response for small talk with execution telemetry."""
+        t_prompt_0 = time.perf_counter()
         if app_name.lower() == "public-chat":
             system_prompt = (
                 "You are Public Chat AI Assistant, a friendly and helpful conversational assistant. "
@@ -384,40 +425,46 @@ class AgentOrchestrator:
                 messages.append({"role": h["role"], "content": h["content"]})
         messages.append({"role": "user", "content": user_message})
 
+        prompt_build_ms = round((time.perf_counter() - t_prompt_0) * 1000, 2)
         dynamic_max_tokens = calculate_dynamic_max_tokens(user_message, is_general_chat=True)
+        llm_telemetry: Dict[str, Any] = {"prompt_build_ms": prompt_build_ms}
+
         try:
-            qwen_response = await self.llm_service.generate_completion(
+            qwen_response, raw_telemetry = await self.llm_service.generate_completion_detailed(
                 messages=messages,
                 temperature=0.3,
                 max_tokens=dynamic_max_tokens
             )
+            llm_telemetry.update(raw_telemetry)
             if qwen_response and len(qwen_response.strip()) > 3:
-                return qwen_response.strip()
+                return qwen_response.strip(), llm_telemetry
         except Exception as e:
             logger.warning(f"Qwen general chat completion failed ({e}). Using deterministic response.")
 
         # Deterministic conversational fallback for test/offline environments
         msg_l = user_message.lower()
         if "selamat malam" in msg_l:
-            return "Selamat malam! Ada yang bisa saya bantu malam ini?"
+            fallback = "Selamat malam! Ada yang bisa saya bantu malam ini?"
         elif "selamat pagi" in msg_l:
-            return "Selamat pagi! Ada yang bisa saya bantu pagi ini?"
+            fallback = "Selamat pagi! Ada yang bisa saya bantu pagi ini?"
         elif "selamat siang" in msg_l:
-            return "Selamat siang! Ada yang bisa saya bantu siang ini?"
+            fallback = "Selamat siang! Ada yang bisa saya bantu siang ini?"
         elif "selamat sore" in msg_l:
-            return "Selamat sore! Ada yang bisa saya bantu sore ini?"
+            fallback = "Selamat sore! Ada yang bisa saya bantu sore ini?"
         elif any(k in msg_l for k in ["halo", "hai", "hello", "hi"]):
-            return "Halo! Ada yang bisa saya bantu?"
+            fallback = "Halo! Ada yang bisa saya bantu?"
         elif "apa kabar" in msg_l:
-            return "Kabar baik! Terima kasih. Ada yang bisa saya bantu?"
+            fallback = "Kabar baik! Terima kasih. Ada yang bisa saya bantu?"
         elif any(k in msg_l for k in ["terima kasih", "makasih", "thanks"]):
-            return "Sama-sama! Senang bisa membantu Anda."
+            fallback = "Sama-sama! Senang bisa membantu Anda."
         elif any(k in msg_l for k in ["siapa kamu", "kamu siapa", "siapa namamu"]):
-            return "Saya adalah AI Assistant yang siap membantu menjawab pertanyaan Anda."
+            fallback = "Saya adalah AI Assistant yang siap membantu menjawab pertanyaan Anda."
         elif "resep" in msg_l:
-            return "Tentu! Untuk makan malam sederhana, Anda bisa mencoba ayam tumis kecap atau telur dadar spesial yang praktis dan lezat."
+            fallback = "Tentu! Untuk makan malam sederhana, Anda bisa mencoba ayam tumis kecap atau telur dadar spesial yang praktis dan lezat."
+        else:
+            fallback = "Halo! Saya siap membantu menjawab pertanyaan Anda."
 
-        return "Halo! Saya siap membantu menjawab pertanyaan Anda."
+        return fallback, llm_telemetry
 
     def _extract_sources(self, tool_results: List[Dict[str, Any]], context_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract and format standardized citations (LMS, PDF, Video, Recommendation)."""
@@ -505,11 +552,13 @@ class AgentOrchestrator:
         history: List[Dict[str, str]],
         intents: List[AgentIntent],
         app_name: str = "owl",
-    ) -> str:
-        """Synthesize a concise, grounded natural language answer using Qwen or deterministic fallback."""
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Synthesize a concise, grounded natural language answer using Qwen or deterministic fallback with telemetry."""
+        llm_telemetry: Dict[str, Any] = {}
         if not tool_results and not context_chunks:
-            return "Informasi tersebut tidak ditemukan dalam materi yang tersedia."
+            return "Informasi tersebut tidak ditemukan dalam materi yang tersedia.", llm_telemetry
 
+        t_prompt_0 = time.perf_counter()
         context_str = ""
         if context_chunks:
             context_str += "\n--- Retrieved Knowledge Chunks ---\n"
@@ -561,9 +610,12 @@ class AgentOrchestrator:
             {"role": "user", "content": f"{history_str}\nGrounding Data:\n{context_str}\n\nUser Question: {user_message}\nAnswer:"}
         ]
 
+        prompt_build_ms = round((time.perf_counter() - t_prompt_0) * 1000, 2)
+        llm_telemetry["prompt_build_ms"] = prompt_build_ms
+
         # In unit test runs, return fast deterministic fallback for consistent assertions
         if "pytest" in sys.modules:
-            return self._generate_deterministic_fallback(user_message, tool_results, context_chunks, intents)
+            return self._generate_deterministic_fallback(user_message, tool_results, context_chunks, intents), llm_telemetry
 
         dynamic_max_tokens = calculate_dynamic_max_tokens(
             user_message=user_message,
@@ -573,18 +625,20 @@ class AgentOrchestrator:
         )
         try:
             if context_chunks or tool_results:
-                qwen_response = await self.llm_service.generate_completion(
+                qwen_response, raw_telemetry = await self.llm_service.generate_completion_detailed(
                     messages=messages,
                     temperature=0.2,
                     max_tokens=dynamic_max_tokens
                 )
+                llm_telemetry.update(raw_telemetry)
                 if qwen_response and len(qwen_response.strip()) > 5:
-                    return qwen_response.strip()
+                    return qwen_response.strip(), llm_telemetry
         except Exception as e:
             logger.warning(f"Qwen synthesis unavailable or timed out ({e}). Falling back to grounded summary generator.")
 
         # Grounded Deterministic Summary Generator (Dev/Test/Fallback mode)
-        return self._generate_deterministic_fallback(user_message, tool_results, context_chunks, intents)
+        fallback = self._generate_deterministic_fallback(user_message, tool_results, context_chunks, intents)
+        return fallback, llm_telemetry
 
     def _generate_deterministic_fallback(
         self,

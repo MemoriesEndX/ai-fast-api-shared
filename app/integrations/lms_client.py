@@ -22,25 +22,32 @@ class LMSClientService:
             "Accept": "application/json",
             "X-Requested-With": "XMLHttpRequest",
         }
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            timeout_config = httpx.Timeout(self.timeout, connect=0.1)
+            limits = httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
+            self._client = httpx.AsyncClient(timeout=timeout_config, limits=limits)
+        return self._client
 
     async def get_user_profile(self, user_id: int) -> Dict[str, Any]:
         """Fetch user profile metadata from Laravel."""
         url = f"{self.base_url}/api/v1/internal/users/{user_id}/profile"
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return {
-                        "user_id": data.get("id", user_id),
-                        "name": data.get("name"),
-                        "division": data.get("division"),
-                        "position": data.get("position") or data.get("department"),
-                        "department": data.get("department"),
-                        "team": data.get("team"),
-                        "role": data.get("role"),
-                    }
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "user_id": data.get("id", user_id),
+                    "name": data.get("name"),
+                    "division": data.get("division"),
+                    "position": data.get("position") or data.get("department"),
+                    "department": data.get("department"),
+                    "team": data.get("team"),
+                    "role": data.get("role"),
+                }
         except Exception as e:
             logger.warning(f"LMS API profile request failed ({e}). Using mock/fallback profile for dev/test.")
         
@@ -50,12 +57,11 @@ class LMSClientService:
     async def get_learning_progress(self, user_id: int) -> Dict[str, Any]:
         """Fetch learning progress items for a user."""
         url = f"{self.base_url}/api/v1/internal/users/{user_id}/progress"
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API progress request failed ({e}). Using mock/fallback progress for dev/test.")
 
@@ -64,12 +70,11 @@ class LMSClientService:
     async def get_user_assessments(self, user_id: int) -> Dict[str, Any]:
         """Fetch assessment results for a user."""
         url = f"{self.base_url}/api/v1/internal/users/{user_id}/assessments"
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API assessments request failed ({e}). Using mock/fallback assessment for dev/test.")
 
@@ -79,12 +84,11 @@ class LMSClientService:
         """Search learning content catalog."""
         url = f"{self.base_url}/api/v1/internal/contents/search"
         params = {"query": query, "limit": limit}
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers, params=params)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers, params=params)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API content search failed ({e}). Using mock search.")
 
@@ -94,12 +98,11 @@ class LMSClientService:
         """Search training playlists catalog."""
         url = f"{self.base_url}/api/v1/internal/playlists/search"
         params = {"query": query, "limit": limit}
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers, params=params)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers, params=params)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API playlist search failed ({e}). Using mock search.")
 
@@ -108,12 +111,11 @@ class LMSClientService:
     async def get_content_detail(self, content_id: int) -> Dict[str, Any]:
         """Get detail of a specific content."""
         url = f"{self.base_url}/api/v1/internal/contents/{content_id}"
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API content detail failed ({e}). Using mock detail.")
 
@@ -122,12 +124,11 @@ class LMSClientService:
     async def get_playlist_detail(self, playlist_id: int) -> Dict[str, Any]:
         """Get detail of a specific playlist including child contents."""
         url = f"{self.base_url}/api/v1/internal/playlists/{playlist_id}"
-        timeout_config = httpx.Timeout(self.timeout, connect=0.1)
         try:
-            async with httpx.AsyncClient(timeout=timeout_config) as client:
-                resp = await client.get(url, headers=self.headers)
-                if resp.status_code == 200:
-                    return resp.json()
+            client = self._get_client()
+            resp = await client.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json()
         except Exception as e:
             logger.warning(f"LMS API playlist detail failed ({e}). Using mock detail.")
 
